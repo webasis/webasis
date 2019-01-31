@@ -103,7 +103,7 @@ func daemon() {
 
 func main() {
 	mlog.TextMode()
-	cmd := getenv("cmd", "client")
+	cmd := getenv("cmd", "rpc")
 	switch cmd {
 	case "daemon":
 		daemon()
@@ -113,6 +113,42 @@ func main() {
 		client()
 	case "watch":
 		watch()
+	case "rpc":
+		rpc()
+	}
+}
+
+func rpc() {
+	c := wrpc.NewClient(WRPCServerURL, Token)
+
+	if len(os.Args) < 2 {
+		fmt.Println("webasis method {args}")
+		return
+	}
+
+	method := os.Args[1]
+	var args []string
+	if len(os.Args) > 2 {
+		args = os.Args[2:]
+	}
+
+	resp, err := c.Call(context.TODO(), method, args...)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(-1)
+	}
+
+	if resp.Status == wrpc.StatusOK {
+		for ret := range resp.Rets {
+			fmt.Println(ret)
+		}
+		os.Exit(0)
+	} else {
+		fmt.Fprintln(os.Stderr, resp.Status)
+		for ret := range resp.Rets {
+			fmt.Fprintln(os.Stderr, ret)
+		}
+		os.Exit(1)
 	}
 }
 
