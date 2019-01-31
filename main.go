@@ -12,6 +12,7 @@ import (
 	clitable "github.com/crackcomm/go-clitable"
 	"github.com/gorilla/websocket"
 	"github.com/immofon/mlog"
+	"github.com/webasis/webasis/webasis"
 	"github.com/webasis/wrpc"
 	"github.com/webasis/wsync"
 )
@@ -107,6 +108,8 @@ func main() {
 	switch cmd {
 	case "daemon":
 		daemon()
+	case "push":
+		push()
 	case "notify":
 		notify()
 	case "client":
@@ -204,6 +207,18 @@ func client() {
 
 	for {
 		sync.Serve()
+	}
+}
+
+func push() {
+	name := "/dev/stdin"
+	if len(os.Args) > 1 {
+		name = os.Args[1]
+	}
+	err := webasis.ShareFile(context.TODO(), name, os.Stdin)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(-1)
 	}
 }
 
