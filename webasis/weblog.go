@@ -85,8 +85,37 @@ func LogSync(ctx context.Context, bufsize int, name string) (in chan<- string, e
 			return
 		}
 
+		buf := make([]string, 0, 1024)
+		size := 0
 		for line := range ch {
-			err = LogAppend(ctx, id, line)
+			if (size + len(buf)) <= bufsize {
+				buf = append(buf, line)
+				size += len(buf)
+				continue
+			}
+
+			custumedLine := false
+			if len(buf) == 0 {
+				buf = append(buf, line)
+				size += len(buf)
+				custumedLine = true
+			}
+
+			err = LogAppend(ctx, id, buf...)
+			if err != nil {
+				errCh <- err
+				return
+			}
+
+			buf = buf[0:0]
+			size = 0
+			if !custumedLine {
+				buf = append(buf, line)
+				size = len(buf)
+			}
+		}
+		if len(buf) > 0 {
+			err = LogAppend(ctx, id, buf...)
 			if err != nil {
 				errCh <- err
 				return
