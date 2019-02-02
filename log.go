@@ -224,7 +224,17 @@ func log() {
 		for _, l := range logs {
 			fmt.Println(l)
 		}
-	case "list":
+	case "delete", "remove", "rm":
+		id := ""
+		if len(os.Args) > 2 {
+			id = os.Args[2]
+		}
+		if id == "" {
+			log_help()
+		}
+
+		ExitIfErr(webasis.LogDelete(context.TODO(), id))
+	case "list", "ls":
 		ids, names, err := webasis.LogAll(context.TODO())
 		ExitIfErr(err)
 
@@ -269,8 +279,10 @@ func ExitIfErr(err error) {
 }
 
 func log_help() {
-	fmt.Println("webasis list")
-	fmt.Println("webasis sync [name]")
-	fmt.Println("webasis get [id]")
+	fmt.Println("help:")
+	fmt.Println("\t", "webasis sync [name]")
+	fmt.Println("\t", "webasis list|ls")
+	fmt.Println("\t", "webasis get id")
+	fmt.Println("\t", "webasis delete|remove|rm id")
 	os.Exit(-2)
 }
