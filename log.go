@@ -292,7 +292,7 @@ func log() {
 		}
 
 		ExitIfErr(<-e)
-	case "watch":
+	case "stats":
 		sync := wsync.NewClient(WSyncServerURL, Token)
 		sync.AfterOpen = func(_ *websocket.Conn) {
 			go sync.Sub("log:new", "log:delete", "log:append", "log:close")
