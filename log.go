@@ -298,7 +298,7 @@ func logs_ls() {
 }
 
 func log() {
-	cmd := "create"
+	cmd := "help"
 
 	if len(os.Args) > 1 {
 		cmd = os.Args[1]
@@ -418,6 +418,8 @@ func log() {
 			return
 		}
 		watch_log(id)
+	case "help":
+		log_help()
 	default:
 		log_help()
 	}
@@ -499,9 +501,12 @@ func ExitIfErr(err error) {
 
 func log_help() {
 	fmt.Println("help:")
-	fmt.Println("\t", "webasis sync [name [bufsize=50000]] ")
+	fmt.Println("\t", "webasis create [name [bufsize=0]] ")
+	fmt.Println("\t", "webasis append [id [bufsize=0]] ")
 	fmt.Println("\t", "webasis list|ls")
 	fmt.Println("\t", "webasis get id")
+	fmt.Println("\t", "webasis stat id")
 	fmt.Println("\t", "webasis delete|remove|rm id {id}")
+	fmt.Println("\t", "webasis help")
 	os.Exit(-2)
 }
