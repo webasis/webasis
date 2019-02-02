@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 
 	clitable "github.com/crackcomm/go-clitable"
 	"github.com/gorilla/websocket"
@@ -277,8 +278,18 @@ func log() {
 		if len(os.Args) > 2 {
 			name = os.Args[2]
 		}
+		bufsize_raw := ""
+		if len(os.Args) > 3 {
+			bufsize_raw = os.Args[3]
+		}
+
+		bufsize, err := strconv.Atoi(bufsize_raw)
+		if err != nil {
+			bufsize = 50000
+		}
+
 		ctx := context.TODO()
-		in, e := webasis.LogSync(ctx, 50000, name)
+		in, e := webasis.LogSync(ctx, bufsize, name)
 		scanner := bufio.NewScanner(os.Stdin)
 		for scanner.Scan() {
 			in <- scanner.Text()
@@ -385,7 +396,7 @@ func ExitIfErr(err error) {
 
 func log_help() {
 	fmt.Println("help:")
-	fmt.Println("\t", "webasis sync [name]")
+	fmt.Println("\t", "webasis sync [name [bufsize=50000]] ")
 	fmt.Println("\t", "webasis list|ls")
 	fmt.Println("\t", "webasis get id")
 	fmt.Println("\t", "webasis delete|remove|rm id {id}")
