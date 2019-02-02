@@ -30,6 +30,16 @@ func (wl weblog) size() int {
 	return size
 }
 
+func (wl weblog) Stat(id string) webasis.WebLogStat {
+	return webasis.WebLogStat{
+		Id:     id,
+		Closed: wl.closed,
+		Size:   wl.size(),
+		Name:   wl.name,
+	}
+
+}
+
 func new_weblog(name string) *weblog {
 	return &weblog{
 		name:   name,
@@ -40,7 +50,7 @@ func new_weblog(name string) *weblog {
 
 // log/open|name -> OK|id	#After# log:new
 // log/close|id -> OK	#After# log#id:close, log:close
-// log/all -> OK{|id,name}
+// log/all -> OK{|id,closed,size,name}
 // log/get|id -> OK{|logs}
 // log/append|id{|logs} -> OK #After# log#id:append, log:append
 // log/delete|id ->OK #After# log#id:delete, log:delete
@@ -117,13 +127,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		ch <- func() {
 			logs := make([]string, 0, len(weblogs))
 			for id, weblog := range weblogs {
-				stat := webasis.WebLogStat{
-					Id:     id,
-					Closed: weblog.closed,
-					Size:   weblog.size(),
-					Name:   weblog.name,
-				}
-				logs = append(logs, stat.Encode())
+				logs = append(logs, weblog.Stat(id).Encode())
 			}
 			retLogs <- logs
 		}
@@ -178,6 +182,29 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 
 		}
 		return wret.OK()
+	})
+
+	// log/stat|id ->OK|name|size:int|closed:bool
+	rpc.HandleFunc("log/stat", func(r wrpc.Req) wrpc.Resp {
+		if len(r.Args) != 1 {
+			return wret.Error("args")
+		}
+
+		id := r.Args[0]
+
+		retCh := make(chan webasis.WebLogStat, 1)
+		ch <- func() {
+			defer close(retCh)
+			weblog, ok := weblogs[id]
+			if ok {
+				retCh <- weblog.Stat(id)
+			}
+		}
+		ret := <-retCh
+		if ret.Id != id {
+			return wret.Error("not_found")
+		}
+		return wret.OK(ret.Name, webasis.Int(ret.Size), webasis.Bool(ret.Closed))
 	})
 
 	rpc.HandleFunc("log/append", func(r wrpc.Req) wrpc.Resp {
@@ -325,6 +352,21 @@ func log() {
 		for {
 			sync.Serve()
 		}
+	case "stat":
+		id := ""
+		if len(os.Args) > 2 {
+			id = os.Args[2]
+		}
+		if id == "" {
+			log_help()
+			return
+		}
+
+		stat, err := webasis.LogStat(context.TODO(), id)
+		ExitIfErr(err)
+		fmt.Println("Name:", stat.Name)
+		fmt.Println("Size:", stat.Size)
+		fmt.Println("Closed:", stat.Closed)
 	case "watch":
 		id := ""
 		if len(os.Args) > 2 {

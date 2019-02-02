@@ -47,6 +47,23 @@ func LogGet(ctx context.Context, id string) (logs []string, err error) {
 	return resp.Rets, nil
 }
 
+func LogStat(ctx context.Context, id string) (stat WebLogStat, err error) {
+	resp, err := Call(ctx, "log/stat", id)
+	err = resp.Error(err, 3)
+	if err != nil {
+		return WebLogStat{}, err
+	}
+
+	fields := Fields(resp.Rets)
+
+	return WebLogStat{
+		Id:     id,
+		Name:   fields.Get(0, ""),
+		Size:   fields.Int(1, 0),
+		Closed: fields.Bool(2, true),
+	}, nil
+}
+
 type WebLogStat struct {
 	Id     string
 	Name   string
