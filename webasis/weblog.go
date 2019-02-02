@@ -2,6 +2,7 @@ package webasis
 
 import (
 	"context"
+	"errors"
 	"strings"
 )
 
@@ -39,6 +40,16 @@ func LogAppend(ctx context.Context, id string, logs ...string) error {
 
 func LogGet(ctx context.Context, id string) (logs []string, err error) {
 	resp, err := Call(ctx, "log/get", id)
+	err = resp.Error(err, -1)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Rets, nil
+}
+
+func LogGetAfter(ctx context.Context, id string, index int) (logs []string, err error) {
+	resp, err := Call(ctx, "log/get/after", id, Int(index))
 	err = resp.Error(err, -1)
 	if err != nil {
 		return nil, err
@@ -103,8 +114,7 @@ func LogAll(ctx context.Context) (stats []WebLogStat, err error) {
 	return stats, nil
 }
 
-// chan in MUST be closed by user
-func LogSync(ctx context.Context, bufsize int, name string) (in chan<- string, e <-chan error) {
+func LogAppendWithBuf(ctx context.Context, bufsize int, id string) (in chan<- string, e <-chan error) {
 	ch := make(chan string, 100)
 	errCh := make(chan error, 1)
 
@@ -115,9 +125,13 @@ func LogSync(ctx context.Context, bufsize int, name string) (in chan<- string, e
 		}()
 		defer close(errCh)
 
-		id, err := LogOpen(ctx, name)
+		stat, err := LogStat(ctx, id)
 		if err != nil {
 			errCh <- err
+			return
+		}
+		if stat.Closed {
+			errCh <- errors.New("error: log closed")
 			return
 		}
 
@@ -166,4 +180,18 @@ func LogSync(ctx context.Context, bufsize int, name string) (in chan<- string, e
 	}()
 
 	return ch, errCh
+
+}
+
+// chan in MUST be closed by user
+func LogCreate(ctx context.Context, bufsize int, name string) (in chan<- string, e <-chan error) {
+	id, err := LogOpen(ctx, name)
+	if err != nil {
+		errCh := make(chan error, 1)
+		errCh <- err
+		close(errCh)
+		return nil, errCh
+	}
+
+	return LogAppendWithBuf(ctx, bufsize, id)
 }

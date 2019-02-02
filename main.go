@@ -107,8 +107,6 @@ func main() {
 }
 
 func rpc() {
-	c := wrpc.NewClient(WRPCServerURL, Token)
-
 	if len(os.Args) < 2 {
 		fmt.Println("webasis method {args}")
 		return
@@ -120,20 +118,20 @@ func rpc() {
 		args = os.Args[2:]
 	}
 
-	resp, err := c.Call(context.TODO(), method, args...)
+	resp, err := webasis.Call(context.TODO(), method, args...)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(-1)
 	}
 
 	if resp.Status == wrpc.StatusOK {
-		for ret := range resp.Rets {
+		for _, ret := range resp.Rets {
 			fmt.Println(ret)
 		}
 		os.Exit(0)
 	} else {
 		fmt.Fprintln(os.Stderr, resp.Status)
-		for ret := range resp.Rets {
+		for _, ret := range resp.Rets {
 			fmt.Fprintln(os.Stderr, ret)
 		}
 		os.Exit(1)
@@ -141,15 +139,13 @@ func rpc() {
 }
 
 func notify() {
-	c := wrpc.NewClient(WRPCServerURL, Token)
-	resp, err := c.Call(context.TODO(), "notify", getenv("content", "hello"), getenv("url", "https://ws.mofon.top/"))
+	resp, err := webasis.Call(context.TODO(), "notify", getenv("content", "hello"), getenv("url", "https://ws.mofon.top/"))
 	if err != nil {
 		panic(err)
 	}
 	fmt.Println(resp)
 }
 func client() {
-	rpc := wrpc.NewClient(WRPCServerURL, Token)
 	sync := wsync.NewClient(WSyncServerURL, Token)
 	sync.OnTopic = func(topic string, metas ...string) {
 		fmt.Println("t:", topic, metas)
@@ -174,7 +170,7 @@ func client() {
 				case "B":
 					sync.Boardcast(topic, metas...)
 				case "R":
-					resp, err := rpc.Call(context.TODO(), topic, metas...)
+					resp, err := webasis.Call(context.TODO(), topic, metas...)
 					if err != nil {
 						fmt.Println(err)
 					} else {
@@ -208,7 +204,6 @@ func push() {
 }
 
 func watch() {
-	rpc := wrpc.NewClient(WRPCServerURL, Token)
 	connected := ""
 	messageSent := ""
 	rpcCount := ""
@@ -227,7 +222,7 @@ func watch() {
 	go func() {
 		for {
 			time.Sleep(time.Second)
-			resp, err := rpc.Call(context.TODO(), "status/wsync/connected")
+			resp, err := webasis.Call(context.TODO(), "status/wsync/connected")
 			if err != nil {
 				continue
 			}
@@ -242,7 +237,7 @@ func watch() {
 	go func() {
 		for {
 			time.Sleep(time.Second)
-			resp, err := rpc.Call(context.TODO(), "status/wsync/message")
+			resp, err := webasis.Call(context.TODO(), "status/wsync/message")
 			if err != nil {
 				continue
 			}
@@ -257,7 +252,7 @@ func watch() {
 	go func() {
 		for {
 			time.Sleep(time.Second)
-			resp, err := rpc.Call(context.TODO(), "status/wrpc/called")
+			resp, err := webasis.Call(context.TODO(), "status/wrpc/called")
 			if err != nil {
 				continue
 			}

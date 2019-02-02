@@ -49,6 +49,8 @@ func new_weblog(name string) *weblog {
 	}
 }
 
+const DefaultBufSize = 0
+
 // log/open|name -> OK|id	#After# log:new
 // log/close|id -> OK	#After# log#id:stat, log:stat
 // log/all -> OK{|id,closed,size,name}
@@ -56,7 +58,9 @@ func new_weblog(name string) *weblog {
 // log/append|id{|logs} -> OK #After# log#id:stat, log:stat
 // log/delete|id ->OK #After# log#id:stat, log:stat
 // log/stat|id ->OK|name|size:int|closed:bool
+// log/get/after|id|index -> OK{|logs}
 func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
+
 	weblogs := make(map[string]*weblog) // map[id]Log
 	nextId := 1
 
@@ -139,24 +143,21 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		return wret.OK(logs...)
 	})
 
-	rpc.HandleFunc("log/get", func(r wrpc.Req) wrpc.Resp {
-		if len(r.Args) != 1 {
-			return wret.Error("args")
-		}
-
-		id := r.Args[0]
+	getAfter := func(id string, index int) wrpc.Resp {
 		retOK := make(chan bool, 1)
 		retLog := make(chan []string, 1)
 		defer close(retOK)
-		defer close(retLog)
 		ch <- func() {
+			defer close(retLog)
 			weblog, ok := weblogs[id]
 			if !ok {
 				retOK <- false
 				return
 			}
 
-			retLog <- weblog.logs
+			if index < len(weblog.logs) {
+				retLog <- weblog.logs[index:]
+			}
 			retOK <- true
 			return
 		}
@@ -166,6 +167,27 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		} else {
 			return wret.Error("not_found")
 		}
+	}
+
+	// log/get/after|id|index -> OK{|logs}
+	rpc.HandleFunc("log/get/after", func(r wrpc.Req) wrpc.Resp {
+		fields := webasis.Fields(r.Args)
+		id := fields.Get(0, "")
+		index := fields.Int(1, -1)
+		if id == "" || index < 0 {
+			return wret.Error("args")
+		}
+
+		return getAfter(id, index)
+	})
+
+	rpc.HandleFunc("log/get", func(r wrpc.Req) wrpc.Resp {
+		if len(r.Args) != 1 {
+			return wret.Error("args")
+		}
+
+		id := r.Args[0]
+		return getAfter(id, 0)
 	})
 
 	rpc.HandleFunc("log/delete", func(r wrpc.Req) wrpc.Resp {
@@ -276,7 +298,7 @@ func logs_ls() {
 }
 
 func log() {
-	cmd := "sync"
+	cmd := "create"
 
 	if len(os.Args) > 1 {
 		cmd = os.Args[1]
@@ -306,7 +328,7 @@ func log() {
 		}
 	case "list", "ls":
 		logs_ls()
-	case "sync":
+	case "create":
 		name := fmt.Sprintf("/dev/stdin#%d", os.Getpid())
 		if len(os.Args) > 2 {
 			name = os.Args[2]
@@ -318,21 +340,35 @@ func log() {
 
 		bufsize, err := strconv.Atoi(bufsize_raw)
 		if err != nil {
-			bufsize = 50000
+			bufsize = DefaultBufSize
 		}
 
 		ctx := context.TODO()
-		in, e := webasis.LogSync(ctx, bufsize, name)
-		scanner := bufio.NewScanner(os.Stdin)
-		for scanner.Scan() {
-			in <- scanner.Text()
+		id, err := webasis.LogOpen(ctx, name)
+		ExitIfErr(err)
+
+		log_append(id, bufsize)
+	case "append":
+		id := ""
+		if len(os.Args) > 2 {
+			id = os.Args[2]
 		}
-		close(in)
-		if err := scanner.Err(); err != nil {
-			fmt.Fprintln(os.Stderr, "reading standard input:", err)
+		if id == "" {
+			log_help()
+			return
 		}
 
-		ExitIfErr(<-e)
+		bufsize_raw := ""
+		if len(os.Args) > 3 {
+			bufsize_raw = os.Args[3]
+		}
+
+		bufsize, err := strconv.Atoi(bufsize_raw)
+		if err != nil {
+			bufsize = DefaultBufSize
+		}
+
+		log_append(id, bufsize)
 	case "stats":
 		sync := wsync.NewClient(WSyncServerURL, Token)
 		sync.AfterOpen = func(_ *websocket.Conn) {
@@ -395,10 +431,18 @@ func watch_log(id string) {
 
 	needUpdate := make(chan bool, 1)
 	go func() {
+		index := 0
 		for range needUpdate {
 			stat, err := webasis.LogStat(context.TODO(), id)
 			ExitIfErr(err)
-			log_get(id, true)
+			logs, err := webasis.LogGetAfter(context.TODO(), id, index)
+			ExitIfErr(err)
+			index += len(logs)
+
+			for _, line := range logs {
+				fmt.Println(line)
+			}
+
 			if stat.Closed {
 				os.Exit(0)
 			}
@@ -427,6 +471,23 @@ func log_get(id string, refresh bool) {
 	for _, l := range logs {
 		fmt.Println(l)
 	}
+}
+
+func log_append(id string, bufsize int) {
+	ctx := context.TODO()
+	in, e := webasis.LogAppendWithBuf(ctx, bufsize, id)
+	go func() {
+		ExitIfErr(<-e) // for exit in real-time
+	}()
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		in <- scanner.Text()
+	}
+	close(in)
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintln(os.Stderr, "reading standard input:", err)
+	}
+	ExitIfErr(<-e) // just for sync
 }
 
 func ExitIfErr(err error) {
