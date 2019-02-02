@@ -49,11 +49,11 @@ func new_weblog(name string) *weblog {
 }
 
 // log/open|name -> OK|id	#After# log:new
-// log/close|id -> OK	#After# log#id:close, log:close
+// log/close|id -> OK	#After# log#id:stat, log:stat
 // log/all -> OK{|id,closed,size,name}
 // log/get|id -> OK{|logs}
-// log/append|id{|logs} -> OK #After# log#id:append, log:append
-// log/delete|id ->OK #After# log#id:delete, log:delete
+// log/append|id{|logs} -> OK #After# log#id:stat, log:stat
+// log/delete|id ->OK #After# log#id:stat, log:stat
 // log/stat|id ->OK|name|size:int|closed:bool
 func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 	weblogs := make(map[string]*weblog) // map[id]Log
@@ -111,8 +111,8 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		}
 		if <-retOK {
 			sync.C <- func(sync *wsync.Server) {
-				sync.Boardcast(fmt.Sprintf("log#%s:close", id))
-				sync.Boardcast("log:close")
+				sync.Boardcast(fmt.Sprintf("log#%s:stat", id))
+				sync.Boardcast("log:stat")
 			}
 
 			return wret.OK()
@@ -176,8 +176,8 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		ch <- func() {
 			delete(weblogs, id)
 			sync.C <- func(sync *wsync.Server) {
-				sync.Boardcast(fmt.Sprintf("log#%s:delete", id))
-				sync.Boardcast("log:delete")
+				sync.Boardcast(fmt.Sprintf("log#%s:stat", id))
+				sync.Boardcast("log:stat")
 			}
 
 		}
@@ -240,8 +240,8 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 			}
 
 			sync.C <- func(sync *wsync.Server) {
-				sync.Boardcast(fmt.Sprintf("log#%s:append", id))
-				sync.Boardcast("log:append")
+				sync.Boardcast(fmt.Sprintf("log#%s:stat", id))
+				sync.Boardcast("log:stat")
 			}
 			retOK <- true
 		}
@@ -267,6 +267,8 @@ func logs_ls() {
 		closed := stats.Closed
 		table.AddRow(map[string]interface{}{"id": id, "name": name, "size": size, "closed": closed})
 	}
+
+	fmt.Print("\x1B[1;1H\x1B[0J")
 	table.Print()
 }
 
@@ -337,7 +339,6 @@ func log() {
 		needUpdate := make(chan bool, 1)
 		go func() {
 			for range needUpdate {
-				fmt.Print("\x1B[1;1H\x1B[0J")
 				logs_ls()
 			}
 		}()
@@ -383,35 +384,26 @@ func log() {
 }
 
 func watch_log(id string) {
-	deleteTopic := fmt.Sprintf("log#%s:delete", id)
-	appendTopic := fmt.Sprintf("log#%s:append", id)
-
 	sync := wsync.NewClient(WSyncServerURL, Token)
 	sync.AfterOpen = func(_ *websocket.Conn) {
-		go sync.Sub(deleteTopic, appendTopic)
+		go sync.Sub(fmt.Sprintf("log#%s:stat", id))
 	}
 
-	needUpdate := make(chan string, 1)
+	needUpdate := make(chan bool, 1)
 	go func() {
-		for topic := range needUpdate {
-			switch topic {
-			case deleteTopic:
+		for range needUpdate {
+			stat, err := webasis.LogStat(context.TODO(), id)
+			ExitIfErr(err)
+			log_get(id)
+			if stat.Closed {
 				os.Exit(0)
-			case appendTopic:
-				fmt.Print("\x1B[1;1H\x1B[0J")
-				log_get(id)
 			}
 		}
 	}()
 
-	isFirst := true
 	sync.OnTopic = func(topic string, metas ...string) {
-		if topic == deleteTopic && isFirst {
-			isFirst = false
-			return
-		}
 		select {
-		case needUpdate <- topic:
+		case needUpdate <- true:
 		default:
 		}
 	}
@@ -419,12 +411,13 @@ func watch_log(id string) {
 	for {
 		sync.Serve()
 	}
-
 }
 
 func log_get(id string) {
 	logs, err := webasis.LogGet(context.TODO(), id)
 	ExitIfErr(err)
+
+	fmt.Print("\x1B[1;1H\x1B[0J")
 	for _, l := range logs {
 		fmt.Println(l)
 	}
