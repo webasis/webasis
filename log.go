@@ -264,15 +264,15 @@ func log() {
 			fmt.Println(l)
 		}
 	case "delete", "remove", "rm":
-		id := ""
-		if len(os.Args) > 2 {
-			id = os.Args[2]
-		}
-		if id == "" {
+		if len(os.Args) < 3 {
 			log_help()
+			return
 		}
+		ids := os.Args[2:]
 
-		ExitIfErr(webasis.LogDelete(context.TODO(), id))
+		for _, id := range ids {
+			ExitIfErr(webasis.LogDelete(context.TODO(), id))
+		}
 	case "list", "ls":
 		logs_ls()
 	case "sync":
@@ -333,6 +333,6 @@ func log_help() {
 	fmt.Println("\t", "webasis sync [name]")
 	fmt.Println("\t", "webasis list|ls")
 	fmt.Println("\t", "webasis get id")
-	fmt.Println("\t", "webasis delete|remove|rm id")
+	fmt.Println("\t", "webasis delete|remove|rm id {id}")
 	os.Exit(-2)
 }
