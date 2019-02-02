@@ -35,6 +35,7 @@ func (wl weblog) Stat(id string) webasis.WebLogStat {
 		Id:     id,
 		Closed: wl.closed,
 		Size:   wl.size(),
+		Line:   len(wl.logs),
 		Name:   wl.name,
 	}
 
@@ -204,7 +205,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		if ret.Id != id {
 			return wret.Error("not_found")
 		}
-		return wret.OK(ret.Name, webasis.Int(ret.Size), webasis.Bool(ret.Closed))
+		return wret.OK(ret.Name, webasis.Int(ret.Size), webasis.Int(ret.Line), webasis.Bool(ret.Closed))
 	})
 
 	rpc.HandleFunc("log/append", func(r wrpc.Req) wrpc.Resp {
@@ -333,7 +334,7 @@ func log() {
 	case "stats":
 		sync := wsync.NewClient(WSyncServerURL, Token)
 		sync.AfterOpen = func(_ *websocket.Conn) {
-			go sync.Sub("log:new", "log:delete", "log:append", "log:close")
+			go sync.Sub("log:new", "log:stat")
 		}
 
 		needUpdate := make(chan bool, 1)
@@ -367,6 +368,7 @@ func log() {
 		ExitIfErr(err)
 		fmt.Println("Name:", stat.Name)
 		fmt.Println("Size:", stat.Size)
+		fmt.Println("Line:", stat.Line)
 		fmt.Println("Closed:", stat.Closed)
 	case "watch":
 		id := ""

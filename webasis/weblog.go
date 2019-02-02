@@ -49,7 +49,7 @@ func LogGet(ctx context.Context, id string) (logs []string, err error) {
 
 func LogStat(ctx context.Context, id string) (stat WebLogStat, err error) {
 	resp, err := Call(ctx, "log/stat", id)
-	err = resp.Error(err, 3)
+	err = resp.Error(err, 4)
 	if err != nil {
 		return WebLogStat{}, err
 	}
@@ -60,7 +60,8 @@ func LogStat(ctx context.Context, id string) (stat WebLogStat, err error) {
 		Id:     id,
 		Name:   fields.Get(0, ""),
 		Size:   fields.Int(1, 0),
-		Closed: fields.Bool(2, true),
+		Line:   fields.Int(2, 0),
+		Closed: fields.Bool(3, true),
 	}, nil
 }
 
@@ -69,6 +70,7 @@ type WebLogStat struct {
 	Name   string
 	Closed bool
 	Size   int
+	Line   int
 }
 
 func (stat WebLogStat) Encode() string {
