@@ -2,8 +2,6 @@ package webasis
 
 import (
 	"context"
-	"fmt"
-	"strconv"
 	"strings"
 )
 
@@ -57,38 +55,17 @@ type WebLogStat struct {
 }
 
 func (stat WebLogStat) Encode() string {
-	closed := "F"
-	if stat.Closed {
-		closed = "T"
-	}
-	return fmt.Sprintf("%s,%s,%d,%s", stat.Id, closed, stat.Size, stat.Name)
+	return strings.Join([]string{stat.Id, Bool(stat.Closed), Int(stat.Size), stat.Name}, ",")
 }
 func DecodeWebLogStat(raw string) WebLogStat {
-	stat := WebLogStat{}
 	data := strings.SplitN(raw, ",", 4)
-	l := len(data)
-	if l > 0 {
-		stat.Id = data[0]
+	fields := Fields(data)
+	return WebLogStat{
+		Id:     fields.Get(0, ""),
+		Closed: fields.Bool(1, true),
+		Size:   fields.Int(2, 0),
+		Name:   fields.Get(3, ""),
 	}
-
-	if l > 1 {
-		if data[1] == "F" {
-			stat.Closed = false
-		} else {
-			stat.Closed = true
-		}
-	}
-	if l > 2 {
-		size, err := strconv.Atoi(data[2])
-		if err != nil {
-			size = 0
-		}
-		stat.Size = size
-	}
-	if l > 3 {
-		stat.Name = data[3]
-	}
-	return stat
 }
 
 func LogAll(ctx context.Context) (stats []WebLogStat, err error) {
