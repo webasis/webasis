@@ -21,6 +21,14 @@ type weblog struct {
 	closed bool
 }
 
+func (wl weblog) size() int {
+	size := len(wl.logs) // size of '\n'
+	for _, l := range wl.logs {
+		size += len([]byte(l))
+	}
+	return size
+}
+
 func new_weblog(name string) *weblog {
 	return &weblog{
 		name:   name,
@@ -30,10 +38,10 @@ func new_weblog(name string) *weblog {
 }
 
 // log/open|name -> OK|id	#After# log:new
-// log/close|id -> OK	#After# log#id:close
+// log/close|id -> OK	#After# log#id:close, log:close
 // log/all -> OK{|id,name}
 // log/get|id -> OK{|logs}
-// log/append|id{|logs} -> OK #After# log#id:append
+// log/append|id{|logs} -> OK #After# log#id:append, log:append
 // log/delete|id ->OK #After# log#id:delete, log:delete
 func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 	weblogs := make(map[string]*weblog) // map[id]Log
@@ -92,6 +100,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		if <-retOK {
 			sync.C <- func(sync *wsync.Server) {
 				sync.Boardcast(fmt.Sprintf("log#%s:close", id))
+				sync.Boardcast("log:close")
 			}
 
 			return wret.OK()
@@ -106,7 +115,13 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		ch <- func() {
 			logs := make([]string, 0, len(weblogs))
 			for id, weblog := range weblogs {
-				logs = append(logs, fmt.Sprintf("%s,%s", id, weblog.name))
+				stat := webasis.WebLogStat{
+					Id:     id,
+					Closed: weblog.closed,
+					Size:   weblog.size(),
+					Name:   weblog.name,
+				}
+				logs = append(logs, stat.Encode())
 			}
 			retLogs <- logs
 		}
@@ -197,6 +212,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 
 			sync.C <- func(sync *wsync.Server) {
 				sync.Boardcast(fmt.Sprintf("log#%s:append", id))
+				sync.Boardcast("log:append")
 			}
 			retOK <- true
 		}
@@ -210,14 +226,17 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 }
 
 func logs_ls() {
-	ids, names, err := webasis.LogAll(context.TODO())
+	stats, err := webasis.LogAll(context.TODO())
 	ExitIfErr(err)
 
-	table := clitable.New([]string{"id", "name"})
+	table := clitable.New([]string{"id", "name", "size", "closed"})
 
-	for i, id := range ids {
-		name := names[i]
-		table.AddRow(map[string]interface{}{"id": id, "name": name})
+	for _, stats := range stats {
+		id := stats.Id
+		size := stats.Size
+		name := stats.Name
+		closed := stats.Closed
+		table.AddRow(map[string]interface{}{"id": id, "name": name, "size": size, "closed": closed})
 	}
 	table.Print()
 }
@@ -276,11 +295,22 @@ func log() {
 	case "watch":
 		sync := wsync.NewClient(WSyncServerURL, Token)
 		sync.AfterOpen = func(_ *websocket.Conn) {
-			go sync.Sub("log:new", "log:delete")
+			go sync.Sub("log:new", "log:delete", "log:append", "log:close")
 		}
+
+		needUpdate := make(chan bool, 1)
+		go func() {
+			for range needUpdate {
+				fmt.Print("\x1B[1;1H\x1B[0J")
+				logs_ls()
+			}
+		}()
+
 		sync.OnTopic = func(topic string, metas ...string) {
-			fmt.Print("\x1B[1;1H\x1B[0J")
-			logs_ls()
+			select {
+			case needUpdate <- true:
+			default:
+			}
 		}
 
 		for {

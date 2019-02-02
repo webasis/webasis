@@ -2,6 +2,8 @@ package webasis
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -47,22 +49,61 @@ func LogGet(ctx context.Context, id string) (logs []string, err error) {
 	return resp.Rets, nil
 }
 
-func LogAll(ctx context.Context) (ids []string, names []string, err error) {
+type WebLogStat struct {
+	Id     string
+	Name   string
+	Closed bool
+	Size   int
+}
+
+func (stat WebLogStat) Encode() string {
+	closed := "f"
+	if stat.Closed {
+		closed = "t"
+	}
+	return fmt.Sprintf("%s,%s,%d,%s", stat.Id, closed, stat.Size, stat.Name)
+}
+func DecodeWebLogStat(raw string) WebLogStat {
+	stat := WebLogStat{}
+	data := strings.SplitN(raw, ",", 4)
+	l := len(data)
+	if l > 0 {
+		stat.Id = data[0]
+	}
+
+	if l > 1 {
+		if data[1] == "f" {
+			stat.Closed = false
+		} else {
+			stat.Closed = true
+		}
+	}
+	if l > 2 {
+		size, err := strconv.Atoi(data[2])
+		if err != nil {
+			size = 0
+		}
+		stat.Size = size
+	}
+	if l > 3 {
+		stat.Name = data[3]
+	}
+	return stat
+}
+
+func LogAll(ctx context.Context) (stats []WebLogStat, err error) {
 	resp, err := Call(ctx, "log/all")
 	err = resp.Error(err, -1)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	ids = make([]string, len(resp.Rets))
-	names = make([]string, len(resp.Rets))
+	stats = make([]WebLogStat, len(resp.Rets))
 	for i, ret := range resp.Rets {
-		data := strings.SplitN(ret, ",", 2)
-		ids[i] = data[0]
-		names[i] = data[1]
+		stats[i] = DecodeWebLogStat(ret)
 	}
 
-	return ids, names, nil
+	return stats, nil
 }
 
 // chan in MUST be closed by user
