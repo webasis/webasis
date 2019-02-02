@@ -2,7 +2,6 @@ package webasis
 
 import (
 	"context"
-	"fmt"
 	"strings"
 )
 
@@ -59,7 +58,6 @@ func LogAll(ctx context.Context) (ids []string, names []string, err error) {
 	names = make([]string, len(resp.Rets))
 	for i, ret := range resp.Rets {
 		data := strings.SplitN(ret, ",", 2)
-		fmt.Println(ret, "|", data)
 		ids[i] = data[0]
 		names[i] = data[1]
 	}

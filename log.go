@@ -5,8 +5,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 
 	clitable "github.com/crackcomm/go-clitable"
+	"github.com/gorilla/websocket"
 	"github.com/webasis/webasis/webasis"
 	"github.com/webasis/wrpc"
 	"github.com/webasis/wrpc/wret"
@@ -32,7 +34,7 @@ func new_weblog(name string) *weblog {
 // log/all -> OK{|id,name}
 // log/get|id -> OK{|logs}
 // log/append|id{|logs} -> OK #After# log#id:append
-// log/delete|id ->OK #After# log#id:delete
+// log/delete|id ->OK #After# log#id:delete, log:delete
 func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 	weblogs := make(map[string]*weblog) // map[id]Log
 	nextId := 1
@@ -108,7 +110,11 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 			}
 			retLogs <- logs
 		}
-		return wret.OK((<-retLogs)...)
+		logs := <-retLogs
+		sort.Slice(logs, func(i, j int) bool {
+			return logs[i] < logs[j]
+		})
+		return wret.OK(logs...)
 	})
 
 	rpc.HandleFunc("log/get", func(r wrpc.Req) wrpc.Resp {
@@ -150,6 +156,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 			delete(weblogs, id)
 			sync.C <- func(sync *wsync.Server) {
 				sync.Boardcast(fmt.Sprintf("log#%s:delete", id))
+				sync.Boardcast("log:delete")
 			}
 
 		}
@@ -202,6 +209,19 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 	})
 }
 
+func logs_ls() {
+	ids, names, err := webasis.LogAll(context.TODO())
+	ExitIfErr(err)
+
+	table := clitable.New([]string{"id", "name"})
+
+	for i, id := range ids {
+		name := names[i]
+		table.AddRow(map[string]interface{}{"id": id, "name": name})
+	}
+	table.Print()
+}
+
 func log() {
 	cmd := "sync"
 
@@ -235,17 +255,7 @@ func log() {
 
 		ExitIfErr(webasis.LogDelete(context.TODO(), id))
 	case "list", "ls":
-		ids, names, err := webasis.LogAll(context.TODO())
-		ExitIfErr(err)
-
-		table := clitable.New([]string{"id", "name"})
-
-		for i, id := range ids {
-			name := names[i]
-			table.AddRow(map[string]interface{}{"id": id, "name": name})
-		}
-		table.Print()
-
+		logs_ls()
 	case "sync":
 		name := fmt.Sprintf("/dev/stdin#%d", os.Getpid())
 		if len(os.Args) > 2 {
@@ -263,6 +273,19 @@ func log() {
 		}
 
 		ExitIfErr(<-e)
+	case "watch":
+		sync := wsync.NewClient(WSyncServerURL, Token)
+		sync.AfterOpen = func(_ *websocket.Conn) {
+			go sync.Sub("log:new", "log:delete")
+		}
+		sync.OnTopic = func(topic string, metas ...string) {
+			fmt.Print("\x1B[1;1H\x1B[0J")
+			logs_ls()
+		}
+
+		for {
+			sync.Serve()
+		}
 	default:
 		log_help()
 	}
