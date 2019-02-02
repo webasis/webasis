@@ -70,26 +70,8 @@ func daemon() {
 		return wret.OK()
 	})
 
-	rpc.HandleFunc("status/wsync/connected", func(r wrpc.Req) wrpc.Resp {
-		ch := make(chan int, 1)
-		sync.C <- func(sync *wsync.Server) {
-			ch <- len(sync.Agents)
-		}
-		return wret.OK(fmt.Sprint(<-ch))
-	})
-
-	rpc.HandleFunc("status/wsync/message", func(r wrpc.Req) wrpc.Resp {
-		ch := make(chan int, 1)
-		sync.C <- func(sync *wsync.Server) {
-			ch <- sync.MessageSent
-		}
-		return wret.OK(fmt.Sprint(<-ch))
-	})
-
-	rpc.HandleFunc("status/wrpc/called", func(r wrpc.Req) wrpc.Resp {
-		ss := rpc.Status()
-		return wret.OK(fmt.Sprint(ss.Count))
-	})
+	EnableStatus(rpc, sync)
+	EnableLog(rpc, sync)
 
 	http.Handle("/wrpc", rpc)
 	http.Handle("/wsync", sync)
@@ -290,7 +272,6 @@ func watch() {
 		fn()
 		show()
 	}
-
 }
 
 func help() {
