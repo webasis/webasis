@@ -14,6 +14,7 @@ import (
 	"github.com/immofon/mlog"
 	"github.com/webasis/webasis/webasis"
 	"github.com/webasis/wrpc"
+	"github.com/webasis/wrpc/wret"
 	"github.com/webasis/wsync"
 )
 
@@ -58,7 +59,7 @@ func daemon() {
 
 	rpc.HandleFunc("notify", func(r wrpc.Req) wrpc.Resp {
 		if len(r.Args) != 2 {
-			return wrpc.Ret(wrpc.StatusError, "args")
+			return wret.Error("args")
 		}
 
 		content := r.Args[0]
@@ -66,7 +67,7 @@ func daemon() {
 		sync.C <- func(sync *wsync.Server) {
 			sync.Boardcast("notify", content, url)
 		}
-		return wrpc.Ret(wrpc.StatusOK)
+		return wret.OK()
 	})
 
 	rpc.HandleFunc("status/wsync/connected", func(r wrpc.Req) wrpc.Resp {
@@ -74,7 +75,7 @@ func daemon() {
 		sync.C <- func(sync *wsync.Server) {
 			ch <- len(sync.Agents)
 		}
-		return wrpc.Ret(wrpc.StatusOK, fmt.Sprint(<-ch))
+		return wret.OK(fmt.Sprint(<-ch))
 	})
 
 	rpc.HandleFunc("status/wsync/message", func(r wrpc.Req) wrpc.Resp {
@@ -82,12 +83,12 @@ func daemon() {
 		sync.C <- func(sync *wsync.Server) {
 			ch <- sync.MessageSent
 		}
-		return wrpc.Ret(wrpc.StatusOK, fmt.Sprint(<-ch))
+		return wret.OK(fmt.Sprint(<-ch))
 	})
 
 	rpc.HandleFunc("status/wrpc/called", func(r wrpc.Req) wrpc.Resp {
 		ss := rpc.Status()
-		return wrpc.Ret(wrpc.StatusOK, fmt.Sprint(ss.Count))
+		return wret.OK(fmt.Sprint(ss.Count))
 	})
 
 	http.Handle("/wrpc", rpc)
