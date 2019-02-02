@@ -101,6 +101,8 @@ func main() {
 		watch()
 	case "rpc":
 		rpc()
+	case "log":
+		log()
 	}
 }
 

@@ -1,8 +1,13 @@
 package main
 
 import (
+	"bufio"
+	"context"
 	"fmt"
+	"os"
 
+	clitable "github.com/crackcomm/go-clitable"
+	"github.com/webasis/webasis/webasis"
 	"github.com/webasis/wrpc"
 	"github.com/webasis/wrpc/wret"
 	"github.com/webasis/wsync"
@@ -97,7 +102,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		retLogs := make(chan []string, 1)
 		defer close(retLogs)
 		ch <- func() {
-			logs := make([]string, len(weblogs))
+			logs := make([]string, 0, len(weblogs))
 			for id, weblog := range weblogs {
 				logs = append(logs, fmt.Sprintf("%s,%s", id, weblog.name))
 			}
@@ -152,7 +157,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 	})
 
 	rpc.HandleFunc("log/append", func(r wrpc.Req) wrpc.Resp {
-		if len(r.Args) != 1 {
+		if len(r.Args) < 1 {
 			return wret.Error("args")
 		}
 
@@ -195,4 +200,77 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 			return wret.Error(reason)
 		}
 	})
+}
+
+func log() {
+	cmd := "sync"
+
+	if len(os.Args) > 1 {
+		cmd = os.Args[1]
+	}
+
+	switch cmd {
+	case "get":
+		id := ""
+		if len(os.Args) > 2 {
+			id = os.Args[2]
+		}
+		if id == "" {
+			log_help()
+		}
+
+		logs, err := webasis.LogGet(context.TODO(), id)
+		ExitIfErr(err)
+		for _, l := range logs {
+			fmt.Println(l)
+		}
+	case "list":
+		ids, names, err := webasis.LogAll(context.TODO())
+		ExitIfErr(err)
+
+		table := clitable.New([]string{"id", "name"})
+
+		for i, id := range ids {
+			name := names[i]
+			table.AddRow(map[string]interface{}{"id": id, "name": name})
+		}
+		table.Print()
+
+	case "sync":
+		name := fmt.Sprintf("/dev/stdin#%d", os.Getpid())
+		if len(os.Args) > 2 {
+			name = os.Args[2]
+		}
+		ctx := context.TODO()
+		id, err := webasis.LogOpen(ctx, name)
+		ExitIfErr(err)
+
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			l := scanner.Text()
+
+			ExitIfErr(webasis.LogAppend(ctx, id, l))
+		}
+		if err := scanner.Err(); err != nil {
+			fmt.Fprintln(os.Stderr, "reading standard input:", err)
+		}
+
+		ExitIfErr(webasis.LogClose(ctx, id))
+	default:
+		log_help()
+	}
+}
+
+func ExitIfErr(err error) {
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(-1)
+	}
+}
+
+func log_help() {
+	fmt.Println("webasis list")
+	fmt.Println("webasis sync [name]")
+	fmt.Println("webasis get [id]")
+	os.Exit(-2)
 }
