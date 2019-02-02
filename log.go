@@ -259,14 +259,16 @@ func logs_ls() {
 	stats, err := webasis.LogAll(context.TODO())
 	ExitIfErr(err)
 
-	table := clitable.New([]string{"id", "name", "size", "closed"})
+	table := clitable.New([]string{"id", "name", "size", "line", "closed"})
 
-	for _, stats := range stats {
-		id := stats.Id
-		size := stats.Size
-		name := stats.Name
-		closed := stats.Closed
-		table.AddRow(map[string]interface{}{"id": id, "name": name, "size": size, "closed": closed})
+	for _, stat := range stats {
+		table.AddRow(map[string]interface{}{
+			"id":     stat.Id,
+			"name":   stat.Name,
+			"line":   stat.Line,
+			"size":   stat.Size,
+			"closed": stat.Closed,
+		})
 	}
 
 	fmt.Print("\x1B[1;1H\x1B[0J")
@@ -291,7 +293,7 @@ func log() {
 			return
 		}
 
-		log_get(id)
+		log_get(id, false)
 	case "delete", "remove", "rm":
 		if len(os.Args) < 3 {
 			log_help()
@@ -396,7 +398,7 @@ func watch_log(id string) {
 		for range needUpdate {
 			stat, err := webasis.LogStat(context.TODO(), id)
 			ExitIfErr(err)
-			log_get(id)
+			log_get(id, true)
 			if stat.Closed {
 				os.Exit(0)
 			}
@@ -415,11 +417,13 @@ func watch_log(id string) {
 	}
 }
 
-func log_get(id string) {
+func log_get(id string, refresh bool) {
 	logs, err := webasis.LogGet(context.TODO(), id)
 	ExitIfErr(err)
 
-	fmt.Print("\x1B[1;1H\x1B[0J")
+	if refresh {
+		fmt.Print("\x1B[1;1H\x1B[0J")
+	}
 	for _, l := range logs {
 		fmt.Println(l)
 	}

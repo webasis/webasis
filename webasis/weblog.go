@@ -74,16 +74,17 @@ type WebLogStat struct {
 }
 
 func (stat WebLogStat) Encode() string {
-	return strings.Join([]string{stat.Id, Bool(stat.Closed), Int(stat.Size), stat.Name}, ",")
+	return strings.Join([]string{stat.Id, stat.Name, Int(stat.Size), Int(stat.Line), Bool(stat.Closed)}, ",")
 }
 func DecodeWebLogStat(raw string) WebLogStat {
-	data := strings.SplitN(raw, ",", 4)
+	data := strings.SplitN(raw, ",", 5)
 	fields := Fields(data)
 	return WebLogStat{
 		Id:     fields.Get(0, ""),
-		Closed: fields.Bool(1, true),
+		Name:   fields.Get(1, ""),
 		Size:   fields.Int(2, 0),
-		Name:   fields.Get(3, ""),
+		Line:   fields.Int(3, 0),
+		Closed: fields.Bool(4, true),
 	}
 }
 
