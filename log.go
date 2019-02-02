@@ -256,13 +256,10 @@ func log() {
 		}
 		if id == "" {
 			log_help()
+			return
 		}
 
-		logs, err := webasis.LogGet(context.TODO(), id)
-		ExitIfErr(err)
-		for _, l := range logs {
-			fmt.Println(l)
-		}
+		log_get(id)
 	case "delete", "remove", "rm":
 		if len(os.Args) < 3 {
 			log_help()
@@ -316,8 +313,66 @@ func log() {
 		for {
 			sync.Serve()
 		}
+	case "watch":
+		id := ""
+		if len(os.Args) > 2 {
+			id = os.Args[2]
+		}
+		if id == "" {
+			log_help()
+			return
+		}
+		watch_log(id)
 	default:
 		log_help()
+	}
+}
+
+func watch_log(id string) {
+	deleteTopic := fmt.Sprintf("log#%s:delete", id)
+	appendTopic := fmt.Sprintf("log#%s:append", id)
+
+	sync := wsync.NewClient(WSyncServerURL, Token)
+	sync.AfterOpen = func(_ *websocket.Conn) {
+		go sync.Sub(deleteTopic, appendTopic)
+	}
+
+	needUpdate := make(chan string, 1)
+	go func() {
+		for topic := range needUpdate {
+			switch topic {
+			case deleteTopic:
+				os.Exit(0)
+			case appendTopic:
+				fmt.Print("\x1B[1;1H\x1B[0J")
+				log_get(id)
+			}
+		}
+	}()
+
+	isFirst := true
+	sync.OnTopic = func(topic string, metas ...string) {
+		if topic == deleteTopic && isFirst {
+			isFirst = false
+			return
+		}
+		select {
+		case needUpdate <- topic:
+		default:
+		}
+	}
+
+	for {
+		sync.Serve()
+	}
+
+}
+
+func log_get(id string) {
+	logs, err := webasis.LogGet(context.TODO(), id)
+	ExitIfErr(err)
+	for _, l := range logs {
+		fmt.Println(l)
 	}
 }
 
