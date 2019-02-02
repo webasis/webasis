@@ -252,20 +252,17 @@ func log() {
 			name = os.Args[2]
 		}
 		ctx := context.TODO()
-		id, err := webasis.LogOpen(ctx, name)
-		ExitIfErr(err)
-
+		in, e := webasis.LogSync(ctx, 50000, name)
 		scanner := bufio.NewScanner(os.Stdin)
 		for scanner.Scan() {
-			l := scanner.Text()
-
-			ExitIfErr(webasis.LogAppend(ctx, id, l))
+			in <- scanner.Text()
 		}
+		close(in)
 		if err := scanner.Err(); err != nil {
 			fmt.Fprintln(os.Stderr, "reading standard input:", err)
 		}
 
-		ExitIfErr(webasis.LogClose(ctx, id))
+		ExitIfErr(<-e)
 	default:
 		log_help()
 	}

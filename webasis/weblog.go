@@ -66,3 +66,39 @@ func LogAll(ctx context.Context) (ids []string, names []string, err error) {
 
 	return ids, names, nil
 }
+
+// chan in MUST be closed by user
+func LogSync(ctx context.Context, bufsize int, name string) (in chan<- string, e <-chan error) {
+	ch := make(chan string, 100)
+	errCh := make(chan error, 1)
+
+	go func() {
+		defer func() {
+			for range ch {
+			}
+		}()
+		defer close(errCh)
+
+		id, err := LogOpen(ctx, name)
+		if err != nil {
+			errCh <- err
+			return
+		}
+
+		for line := range ch {
+			err = LogAppend(ctx, id, line)
+			if err != nil {
+				errCh <- err
+				return
+			}
+		}
+
+		err = LogClose(ctx, id)
+		if err != nil {
+			errCh <- err
+			return
+		}
+	}()
+
+	return ch, errCh
+}
