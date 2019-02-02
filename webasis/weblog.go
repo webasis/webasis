@@ -57,9 +57,9 @@ type WebLogStat struct {
 }
 
 func (stat WebLogStat) Encode() string {
-	closed := "f"
+	closed := "F"
 	if stat.Closed {
-		closed = "t"
+		closed = "T"
 	}
 	return fmt.Sprintf("%s,%s,%d,%s", stat.Id, closed, stat.Size, stat.Name)
 }
@@ -72,7 +72,7 @@ func DecodeWebLogStat(raw string) WebLogStat {
 	}
 
 	if l > 1 {
-		if data[1] == "f" {
+		if data[1] == "F" {
 			stat.Closed = false
 		} else {
 			stat.Closed = true

@@ -44,6 +44,7 @@ func new_weblog(name string) *weblog {
 // log/get|id -> OK{|logs}
 // log/append|id{|logs} -> OK #After# log#id:append, log:append
 // log/delete|id ->OK #After# log#id:delete, log:delete
+// log/stat|id ->OK|name|size:int|closed:bool
 func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 	weblogs := make(map[string]*weblog) // map[id]Log
 	nextId := 1
