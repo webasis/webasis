@@ -35,31 +35,36 @@ WEBASIS_TOKEN=token_for_auth
 - log/stat|id -> ok|name|size:int|closed:bool
 - log/get/after|id|index -> ok{|logs}
 
-## push: webasis [name=/dev/stdin]
+## push
+webasis [name=/dev/stdin]
 push content to wsync's notify topic
 read content from STDIN
 
 ## watch
 watch the server's status
 
-## rpc: webasis method {args}
+## rpc
+webasis method {args}
 
 ## client
+```
 -> (R|S|U|B) topic {metas}
 R: rpc
 S: sub
 U: unsup
 B: boardcast
+```
 
-## log: webasis cmd {args}
-### cmd: get: args=id
-### cmd: delete|remove|rm: args={id}
-### cmd: list|ls
-### cmd: create: args=[name [bufsize=0]]
-### cmd: append: args=[id   [bufsize=0]]
-### cmd: stats
-### cmd: stat args=id
-### cmd: watch args=id
+## log
+webasis cmd {args}
+- get: args=id
+- delete|remove|rm: args={id}
+- list|ls
+- create: args=[name [bufsize=0]]
+- append: args=[id   [bufsize=0]]
+- stats
+- stat args=id
+- watch args=id
 
 
 
