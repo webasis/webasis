@@ -277,7 +277,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 	})
 }
 
-func logs_ls() {
+func logs_ls(need_refresh bool) {
 	stats, err := webasis.LogAll(context.TODO())
 	ExitIfErr(err)
 
@@ -293,7 +293,9 @@ func logs_ls() {
 		})
 	}
 
-	fmt.Print("\x1B[1;1H\x1B[0J")
+	if need_refresh {
+		fmt.Print("\x1B[1;1H\x1B[0J")
+	}
 	table.Print()
 }
 
@@ -327,7 +329,7 @@ func log() {
 			ExitIfErr(webasis.LogDelete(context.TODO(), id))
 		}
 	case "list", "ls":
-		logs_ls()
+		logs_ls(false)
 	case "create":
 		name := fmt.Sprintf("/dev/stdin#%d", os.Getpid())
 		if len(os.Args) > 2 {
@@ -378,7 +380,7 @@ func log() {
 		needUpdate := make(chan bool, 1)
 		go func() {
 			for range needUpdate {
-				logs_ls()
+				logs_ls(true)
 			}
 		}()
 
