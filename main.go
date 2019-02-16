@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -40,6 +41,12 @@ func getenv(key, defv string) string {
 	return v
 }
 
+type notifyReq struct {
+	Title   string `json:"title"`
+	Content string `json:"content"`
+	Token   string `json:"token"`
+}
+
 func daemon() {
 	sync := wsync.NewServer()
 	rpc := wrpc.NewServer()
@@ -75,6 +82,28 @@ func daemon() {
 
 	http.Handle("/wrpc", rpc)
 	http.Handle("/wsync", sync)
+	http.HandleFunc("/api/notify", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req notifyReq
+		err := json.NewDecoder(r.Body).Decode(&req)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, err)
+			return
+		}
+		if req.Token != Token {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		sync.C <- func(sync *wsync.Server) {
+			sync.Boardcast("notify", req.Title, req.Content)
+		}
+		w.WriteHeader(http.StatusOK)
+	})
 
 	mlog.L().WithField("addr", ServeAddr).WithField("token", Token).Info("listen")
 	if ServeSSL == "on" {
