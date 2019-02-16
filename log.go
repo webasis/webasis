@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"time"
 
 	clitable "github.com/crackcomm/go-clitable"
 	"github.com/gorilla/websocket"
@@ -17,9 +18,10 @@ import (
 )
 
 type weblog struct {
-	name   string
-	logs   []string
-	closed bool
+	name       string
+	logs       []string
+	closed     bool
+	alwaysOpen bool
 }
 
 func (wl weblog) size() int {
@@ -43,10 +45,16 @@ func (wl weblog) Stat(id string) webasis.WebLogStat {
 
 func new_weblog(name string) *weblog {
 	return &weblog{
-		name:   name,
-		logs:   make([]string, 0, 16),
-		closed: false,
+		name:       name,
+		logs:       make([]string, 0, 16),
+		closed:     false,
+		alwaysOpen: false,
 	}
+}
+
+type notifyLog struct {
+	id      string
+	version string
 }
 
 const DefaultBufSize = 0
@@ -63,11 +71,29 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 
 	weblogs := make(map[string]*weblog) // map[id]Log
 	nextId := 1
+	notify_logs := make(map[string]*notifyLog) // map[token]
 
 	getNextId := func() string {
 		id := nextId
 		nextId++
 		return fmt.Sprint(id)
+	}
+
+	getNotifyLog := func(token string) *notifyLog {
+		nl := notify_logs[token]
+		if nl == nil {
+			new_id := getNextId()
+			wl := new_weblog("notify@" + new_id)
+			wl.alwaysOpen = true
+			weblogs[new_id] = wl
+
+			nl = &notifyLog{
+				id:      new_id,
+				version: fmt.Sprint(time.Now().Unix()),
+			}
+			notify_logs[token] = nl
+		}
+		return nl
 	}
 
 	ch := make(chan func(), 1000)
@@ -97,6 +123,35 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		return wret.OK(<-id)
 	})
 
+	rpc.HandleFunc("log/notify", func(r wrpc.Req) wrpc.Resp {
+		if len(r.Args) != 1 {
+			return wret.Error("args")
+		}
+
+		content := r.Args[0]
+
+		id := make(chan string, 1)
+		ch <- func() {
+			nl := getNotifyLog(r.Token)
+			id <- nl.id
+		}
+
+		return rpc.Call(wrpc.Req{
+			Token:  r.Token,
+			Method: "log/append",
+			Args:   []string{<-id, content},
+		})
+	})
+	rpc.HandleFunc("log/notify/info", func(r wrpc.Req) wrpc.Resp {
+		nlch := make(chan notifyLog, 1)
+		ch <- func() {
+			nl := getNotifyLog(r.Token)
+			nlch <- *nl
+		}
+		nl := <-nlch
+		return wret.OK(nl.id, nl.version)
+	})
+
 	rpc.HandleFunc("log/close", func(r wrpc.Req) wrpc.Resp {
 		if len(r.Args) != 1 {
 			return wret.Error("args")
@@ -108,6 +163,10 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		defer close(retOK)
 		ch <- func() {
 			if weblog, ok := weblogs[id]; ok {
+				if weblog.alwaysOpen {
+					retOK <- false
+					return
+				}
 				weblog.closed = true
 				retOK <- true
 			} else {
