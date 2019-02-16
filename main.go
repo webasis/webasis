@@ -95,7 +95,12 @@ func daemon() {
 			fmt.Fprint(w, err)
 			return
 		}
-		if req.Token != Token {
+
+		if !rpc.Auth(wrpc.Req{
+			Token:  req.Token,
+			Method: "notify",
+			Args:   []string{req.Title, req.Content},
+		}) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}

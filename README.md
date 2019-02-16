@@ -69,10 +69,13 @@ webasis cmd {args}
 
 
 # http api
+## notify
 POST https://ws.mofon.top:8111/api/notify
 ```
 {
 	"title":"","content":"","token":""
 }
 ```
-`curl https://ws.mofon.top:8111/api/notify -v -d "{\"title\":\"test\",\"content\":\"https://baidu.com/\",\"token\":\"${WEBASIS_TOKEN}\"}"`
+```
+curl https://ws.mofon.top:8111/api/notify -v -d "{\"title\":\"test\",\"content\":\"https://baidu.com/\",\"token\":\"${WEBASIS_TOKEN}\"}"
+```
