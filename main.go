@@ -27,6 +27,8 @@ var (
 
 	ServeAddr = getenv("WEBASIS_LISTEN", "localhost:8111")
 
+	NotificationURL = getenv("WEBASIS_NOTIFICATION_URL", "http://"+ServeAddr+"/notification")
+
 	// client
 	WSyncServerURL = getenv("WEBASIS_WSYNC_SERVER_URL", "ws://localhost:8111/wsync")
 	WRPCServerURL  = getenv("WEBASIS_WRPC_SERVER_URL", "http://localhost:8111/wrpc")
@@ -42,9 +44,14 @@ func getenv(key, defv string) string {
 }
 
 type notifyReq struct {
-	Title   string `json:"title"`
 	Content string `json:"content"`
 	Token   string `json:"token"`
+}
+
+type Notify struct {
+	Time int64    `json:"time"`
+	Type string   `json:"type"`
+	Data []string `json:"data"`
 }
 
 func daemon() {
@@ -65,16 +72,32 @@ func daemon() {
 	}
 
 	rpc.HandleFunc("notify", func(r wrpc.Req) wrpc.Resp {
-		if len(r.Args) != 2 {
+		if len(r.Args) != 1 {
 			return wret.Error("args")
 		}
 
 		content := r.Args[0]
-		url := r.Args[1]
-		sync.C <- func(sync *wsync.Server) {
-			sync.Boardcast("notify", content, url)
+
+		raw, err := json.Marshal(Notify{
+			Time: time.Now().Unix(),
+			Type: "text",
+			Data: []string{content},
+		})
+		if err != nil {
+			return wret.IError(err.Error())
 		}
-		return wret.OK()
+
+		resp := rpc.Call(wrpc.Req{
+			Token:  r.Token,
+			Method: "log/notify",
+			Args:   []string{string(raw)},
+		})
+		if resp.Status == wrpc.StatusOK {
+			sync.C <- func(sync *wsync.Server) {
+				sync.Boardcast("notify", content, NotificationURL)
+			}
+		}
+		return resp
 	})
 
 	EnableStatus(rpc, sync)
@@ -96,18 +119,19 @@ func daemon() {
 			return
 		}
 
-		if !rpc.Auth(wrpc.Req{
+		ret := rpc.Call(wrpc.Req{
 			Token:  req.Token,
 			Method: "notify",
-			Args:   []string{req.Title, req.Content},
-		}) {
+			Args:   []string{req.Content},
+		})
+		switch ret.Status {
+		case wrpc.StatusOK:
+			w.WriteHeader(http.StatusOK)
+		case wrpc.StatusAuth:
 			w.WriteHeader(http.StatusUnauthorized)
-			return
+		default:
+			w.WriteHeader(http.StatusForbidden)
 		}
-		sync.C <- func(sync *wsync.Server) {
-			sync.Boardcast("notify", req.Title, req.Content)
-		}
-		w.WriteHeader(http.StatusOK)
 	})
 
 	mlog.L().WithField("addr", ServeAddr).WithField("token", Token).Info("listen")
