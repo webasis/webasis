@@ -136,7 +136,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 			id <- nl.id
 		}
 
-		return rpc.Call(wrpc.Req{
+		return rpc.CallWithoutAuth(wrpc.Req{
 			Token:  r.Token,
 			Method: "log/append",
 			Args:   []string{<-id, content},

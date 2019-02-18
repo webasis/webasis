@@ -87,7 +87,7 @@ func daemon() {
 			return wret.IError(err.Error())
 		}
 
-		resp := rpc.Call(wrpc.Req{
+		resp := rpc.CallWithoutAuth(wrpc.Req{
 			Token:  r.Token,
 			Method: "log/notify",
 			Args:   []string{string(raw)},
