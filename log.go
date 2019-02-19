@@ -12,6 +12,7 @@ import (
 	clitable "github.com/crackcomm/go-clitable"
 	"github.com/gorilla/websocket"
 	"github.com/webasis/webasis/webasis"
+	"github.com/webasis/wrbac"
 	"github.com/webasis/wrpc"
 	"github.com/webasis/wrpc/wret"
 	"github.com/webasis/wsync"
@@ -71,7 +72,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 
 	weblogs := make(map[string]*weblog) // map[id]Log
 	nextId := 1
-	notify_logs := make(map[string]*notifyLog) // map[token]
+	notify_logs := make(map[string]*notifyLog) // map[name]
 
 	getNextId := func() string {
 		id := nextId
@@ -80,10 +81,11 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 	}
 
 	getNotifyLog := func(token string) *notifyLog {
-		nl := notify_logs[token]
+		name, _ := wrbac.FromToken(token)
+		nl := notify_logs[name]
 		if nl == nil {
 			new_id := getNextId()
-			wl := new_weblog("notify@" + new_id)
+			wl := new_weblog("notification@" + name)
 			wl.alwaysOpen = true
 			weblogs[new_id] = wl
 
@@ -91,7 +93,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 				id:      new_id,
 				version: fmt.Sprint(time.Now().Unix()),
 			}
-			notify_logs[token] = nl
+			notify_logs[name] = nl
 		}
 		return nl
 	}
