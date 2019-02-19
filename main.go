@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/immofon/mlog"
 	"github.com/webasis/webasis/webasis"
+	"github.com/webasis/wrbac"
 	"github.com/webasis/wrpc"
 	"github.com/webasis/wrpc/wret"
 	"github.com/webasis/wsync"
@@ -58,18 +59,38 @@ func daemon() {
 	sync := wsync.NewServer()
 	rpc := wrpc.NewServer()
 
-	sync.Auth = func(token string, m wsync.AuthMethod, topic string) bool {
-		if token == Token {
-			return true
+	rbac := wrbac.New()
+	rbac.Update(func() error {
+		role_admin := &wrbac.Role{
+			Sync: func(token string, m wsync.AuthMethod, topic string) bool {
+				return true
+			},
+			RPC: func(r wrpc.Req) bool {
+				return true
+			},
 		}
-		return false
-	}
-	rpc.Auth = func(r wrpc.Req) bool {
-		if r.Token == Token {
-			return true
+
+		role_test_rbac := &wrbac.Role{
+			Sync: func(token string, m wsync.AuthMethod, topic string) bool {
+				return true
+			},
+			RPC: func(r wrpc.Req) bool {
+				fmt.Println("auth:test method:", r.Method)
+				switch r.Method {
+				case "log/get", "log/notify/info", "log/get/after":
+					return true
+				}
+				return false
+			},
 		}
-		return false
-	}
+
+		rbac.Users[Token] = wrbac.NewRS(role_admin)
+		rbac.Users["test"] = wrbac.NewRS(role_test_rbac)
+		return nil
+	})
+
+	sync.Auth = rbac.AuthSync
+	rpc.Auth = rbac.AuthRPC
 
 	rpc.HandleFunc("notify", func(r wrpc.Req) wrpc.Resp {
 		if len(r.Args) != 1 {
@@ -188,10 +209,7 @@ func rpc() {
 		}
 		os.Exit(0)
 	} else {
-		fmt.Fprintln(os.Stderr, resp.Status)
-		for _, ret := range resp.Rets {
-			fmt.Fprintln(os.Stderr, ret)
-		}
+		fmt.Fprintf(os.Stderr, "\x1b[31m%s \x1b[33m%s\x1b[0m", resp.Status, strings.Join(resp.Rets, "\x1b[90m|\x1b[33m"))
 		os.Exit(1)
 	}
 }
