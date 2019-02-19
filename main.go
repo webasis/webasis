@@ -84,8 +84,10 @@ func daemon() {
 			},
 		}
 
-		rbac.Users[Token] = wrbac.NewRS(role_admin)
-		rbac.Users["test"] = wrbac.NewRS(role_test_rbac)
+		fmt.Printf("[token: %s] %s\n", "admin", wrbac.ToToken("admin", "mofon"))
+		fmt.Printf("[token: %s] %s\n", "test", wrbac.ToToken("test", "test"))
+		rbac.Users["admin"] = wrbac.NewUser("mofon", role_admin)
+		rbac.Users["test"] = wrbac.NewUser("test", role_test_rbac)
 		return nil
 	})
 
