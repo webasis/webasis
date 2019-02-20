@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
@@ -27,6 +28,8 @@ var (
 	SSLKey   = getenv("WEBASIS_SSL_KEY", "")
 
 	ServeAddr = getenv("WEBASIS_LISTEN", "localhost:8111")
+
+	AuthFile = getenv("WEBASIS_AUTH_FILE", "")
 
 	NotificationURL = getenv("WEBASIS_NOTIFICATION_URL", "http://"+ServeAddr+"/notification")
 
@@ -55,41 +58,74 @@ type Notify struct {
 	Data []string `json:"data"`
 }
 
+type User struct {
+	Secret string   `json:"secret"`
+	Roles  []string `json:"roles"`
+}
+type AuthModel map[string]map[string]User // map[name]map[comment]User
+
 func daemon() {
 	sync := wsync.NewServer()
 	rpc := wrpc.NewServer()
 
 	rbac := wrbac.New()
-	rbac.Update(func() error {
-		role_admin := &wrbac.Role{
-			Sync: func(token string, m wsync.AuthMethod, topic string) bool {
-				return true
-			},
-			RPC: func(r wrpc.Req) bool {
-				return true
-			},
-		}
-
-		role_test_rbac := &wrbac.Role{
-			Sync: func(token string, m wsync.AuthMethod, topic string) bool {
-				return true
-			},
-			RPC: func(r wrpc.Req) bool {
-				fmt.Println("auth:test method:", r.Method)
-				switch r.Method {
-				case "log/get", "log/notify/info", "log/get/after":
-					return true
-				}
-				return false
-			},
-		}
-
-		fmt.Printf("[token: %s] %s\n", "admin", wrbac.ToToken("admin", "mofon"))
-		fmt.Printf("[token: %s] %s\n", "test", wrbac.ToToken("test", "test"))
-		rbac.Users["admin"] = wrbac.NewUser("mofon", role_admin)
-		rbac.Users["test"] = wrbac.NewUser("test", role_test_rbac)
-		return nil
+	rbac.Register("root", &wrbac.Role{
+		Sync: func(token string, m wsync.AuthMethod, topic string) bool {
+			return true
+		},
+		RPC: func(r wrpc.Req) bool {
+			return true
+		},
 	})
+
+	rbac.Register("notification_sender", &wrbac.Role{
+		Sync: func(token string, m wsync.AuthMethod, topic string) bool {
+			return false
+		},
+		RPC: func(r wrpc.Req) bool {
+			return r.Method == "notify"
+		},
+	})
+	rbac.Register("notification_receiver", &wrbac.Role{
+		Sync: func(token string, m wsync.AuthMethod, topic string) bool {
+			return true
+		},
+		RPC: func(r wrpc.Req) bool {
+			switch r.Method {
+			case "log/notify/info", "log/get/after":
+				return true
+			}
+			return false
+		},
+	})
+
+	var authModel AuthModel
+	authJsonData, err := ioutil.ReadFile(AuthFile)
+	if err != nil {
+		fmt.Println("require set $WEBASIS_AUTH_FILE")
+		panic(err)
+	}
+	if err := json.Unmarshal(authJsonData, &authModel); err != nil {
+		panic(err)
+	}
+
+	configFailure := false
+	for name, client := range authModel {
+		fmt.Println("name:", name)
+		for desc, user := range client {
+			for _, role := range user.Roles {
+				if !rbac.Check(role) {
+					fmt.Printf("config error: %s.%s unregistered_role: %s\n", name, desc, role)
+					configFailure = true
+				}
+			}
+			if configFailure {
+				os.Exit(1)
+			}
+			rbac.Load(name, user.Secret, user.Roles...)
+			fmt.Printf("\t%s: <token> %s\n", desc, wrbac.ToToken(name, user.Secret))
+		}
+	}
 
 	sync.Auth = rbac.AuthSync
 	rpc.Auth = rbac.AuthRPC

@@ -85,7 +85,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		nl := notify_logs[name]
 		if nl == nil {
 			new_id := getNextId()
-			wl := new_weblog("notification@" + name)
+			wl := new_weblog(name + "@notification")
 			wl.alwaysOpen = true
 			weblogs[new_id] = wl
 
