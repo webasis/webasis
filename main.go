@@ -141,8 +141,6 @@ func main() {
 		daemon()
 	case "push":
 		push()
-	case "notify":
-		notify()
 	case "client":
 		client()
 	case "watch":
@@ -183,13 +181,6 @@ func rpc() {
 	}
 }
 
-func notify() {
-	resp, err := webasis.Call(context.TODO(), "notify", getenv("content", "hello"), getenv("url", "https://ws.mofon.top/"))
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(resp)
-}
 func client() {
 	sync := wsync.NewClient(WSyncServerURL, Token)
 	sync.OnTopic = func(topic string, metas ...string) {
