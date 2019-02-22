@@ -67,7 +67,9 @@ func daemon() {
 		for {
 			time.Sleep(time.Minute * 5)
 			sync.C <- func(sync *wsync.Server) {
-				sync.GC()
+				//	sync.GC()
+				// TODO fix: ref to outer resourece
+				// e.g. log:{name}@{id}
 			}
 		}
 	}()
