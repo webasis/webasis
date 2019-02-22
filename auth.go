@@ -20,7 +20,7 @@ type AuthModel map[string]map[string]User // map[name]map[comment]User
 func EnableAuth(rpc *wrpc.Server, sync *wsync.Server) {
 	rbac := wrbac.New()
 	wrbac_register_role(rbac)
-	wrbac_load(rbac, false)
+	wrbac_load(rbac)
 	sync.Auth = rbac.AuthSync
 	rpc.Auth = rbac.AuthRPC
 }
@@ -28,7 +28,7 @@ func EnableAuth(rpc *wrpc.Server, sync *wsync.Server) {
 func wrbac_check() {
 	rbac := wrbac.New()
 	wrbac_register_role(rbac)
-	wrbac_load(rbac, true)
+	wrbac_load(rbac)
 }
 
 func wrbac_register_role(rbac *wrbac.Table) {
@@ -63,11 +63,14 @@ func wrbac_register_role(rbac *wrbac.Table) {
 	})
 }
 
-func wrbac_load(rbac *wrbac.Table, only_check bool) {
+func wrbac_load(rbac *wrbac.Table) {
 	authModel := get_auth_model()
 	configFailure := false
 	for name, client := range authModel {
-		fmt.Println("name:", name)
+		if !configFailure {
+			fmt.Println("name:", name)
+		}
+
 		for desc, user := range client {
 			for _, role := range user.Roles {
 				if !rbac.Check(role) {
@@ -75,16 +78,15 @@ func wrbac_load(rbac *wrbac.Table, only_check bool) {
 					configFailure = true
 				}
 			}
-			if configFailure {
-				if !only_check {
-					os.Exit(1)
-				}
+
+			rbac.Load(name, user.Secret, user.Roles...)
+			if !configFailure {
+				fmt.Printf("    %s\t%s\n", desc, wrbac.ToToken(name, user.Secret))
 			}
-			if !only_check {
-				rbac.Load(name, user.Secret, user.Roles...)
-			}
-			fmt.Printf("    %s\t%s\n", desc, wrbac.ToToken(name, user.Secret))
 		}
+	}
+	if configFailure {
+		os.Exit(1)
 	}
 }
 
