@@ -176,7 +176,7 @@ func rpc() {
 		}
 		os.Exit(0)
 	} else {
-		fmt.Fprintf(os.Stderr, "\x1b[31m%s \x1b[33m%s\x1b[0m", resp.Status, strings.Join(resp.Rets, "\x1b[90m|\x1b[33m"))
+		fmt.Fprintf(os.Stderr, "\x1b[31m%s \x1b[33m%s\x1b[0m\n", resp.Status, strings.Join(resp.Rets, "\x1b[90m|\x1b[33m"))
 		os.Exit(1)
 	}
 }
