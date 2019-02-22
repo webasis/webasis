@@ -61,6 +61,16 @@ func daemon() {
 	sync := wsync.NewServer()
 	rpc := wrpc.NewServer()
 
+	// open gc
+	go func() {
+		for {
+			time.Sleep(time.Minute * 5)
+			sync.C <- func(sync *wsync.Server) {
+				sync.GC()
+			}
+		}
+	}()
+
 	rpc.HandleFunc("notify", func(r wrpc.Req) wrpc.Resp {
 		if len(r.Args) != 1 {
 			return wret.Error("args")
