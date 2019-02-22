@@ -19,6 +19,19 @@ type AuthModel map[string]map[string]User // map[name]map[comment]User
 
 func EnableAuth(rpc *wrpc.Server, sync *wsync.Server) {
 	rbac := wrbac.New()
+	wrbac_register_role(rbac)
+	wrbac_load(rbac, false)
+	sync.Auth = rbac.AuthSync
+	rpc.Auth = rbac.AuthRPC
+}
+
+func wrbac_check() {
+	rbac := wrbac.New()
+	wrbac_register_role(rbac)
+	wrbac_load(rbac, true)
+}
+
+func wrbac_register_role(rbac *wrbac.Table) {
 	rbac.Register("root", &wrbac.Role{
 		Sync: func(token string, m wsync.AuthMethod, topic string) bool {
 			return true
@@ -48,7 +61,34 @@ func EnableAuth(rpc *wrpc.Server, sync *wsync.Server) {
 			return false
 		},
 	})
+}
 
+func wrbac_load(rbac *wrbac.Table, only_check bool) {
+	authModel := get_auth_model()
+	configFailure := false
+	for name, client := range authModel {
+		fmt.Println("name:", name)
+		for desc, user := range client {
+			for _, role := range user.Roles {
+				if !rbac.Check(role) {
+					fmt.Printf("\x1b[31mconfig error: %s.%s unregistered_role: %s\n\x1b[0m", name, desc, role)
+					configFailure = true
+				}
+			}
+			if configFailure {
+				if !only_check {
+					os.Exit(1)
+				}
+			}
+			if !only_check {
+				rbac.Load(name, user.Secret, user.Roles...)
+			}
+			fmt.Printf("    %s\t%s\n", desc, wrbac.ToToken(name, user.Secret))
+		}
+	}
+}
+
+func get_auth_model() AuthModel {
 	var authModel AuthModel
 	authJsonData, err := ioutil.ReadFile(AuthFile)
 	if err != nil {
@@ -58,26 +98,5 @@ func EnableAuth(rpc *wrpc.Server, sync *wsync.Server) {
 	if err := json.Unmarshal(authJsonData, &authModel); err != nil {
 		panic(err)
 	}
-
-	configFailure := false
-	for name, client := range authModel {
-		fmt.Println("name:", name)
-		for desc, user := range client {
-			for _, role := range user.Roles {
-				if !rbac.Check(role) {
-					fmt.Printf("config error: %s.%s unregistered_role: %s\n", name, desc, role)
-					configFailure = true
-				}
-			}
-			if configFailure {
-				os.Exit(1)
-			}
-			rbac.Load(name, user.Secret, user.Roles...)
-			fmt.Printf("\t%s: <token> %s\n", desc, wrbac.ToToken(name, user.Secret))
-		}
-	}
-
-	sync.Auth = rbac.AuthSync
-	rpc.Auth = rbac.AuthRPC
-
+	return authModel
 }

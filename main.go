@@ -139,6 +139,8 @@ func main() {
 	switch cmd {
 	case "daemon":
 		daemon()
+	case "check":
+		wrbac_check()
 	case "push":
 		push()
 	case "client":
