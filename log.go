@@ -221,7 +221,18 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		return wret.OK(logs...)
 	})
 
-	getAfter := func(id string, start, max_num int) wrpc.Resp {
+	get_num := func(logs []string, max_size int) int {
+		size := 0
+		for i, log := range logs {
+			size += len([]byte(log)) + 1
+			if size > max_size {
+				return i
+			}
+		}
+		return len(logs)
+	}
+
+	getAfter := func(id string, start, max_num, max_size int) wrpc.Resp {
 		if max_num < 1 {
 			max_num = 1
 		}
@@ -238,7 +249,15 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 			}
 
 			if start < len(weblog.logs) {
-				end := start + max_num
+				num := get_num(weblog.logs, max_size)
+				if num < 1 {
+					num = 1
+				}
+				if num > max_num {
+					num = max_num
+				}
+
+				end := start + num
 				if end > len(weblog.logs) {
 					end = len(weblog.logs)
 				}
@@ -261,11 +280,12 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		id := fields.Get(0, "")
 		start := fields.Int(1, 0)
 		max_num := fields.Int(2, 1000000)
+		max_size := fields.Int(3, 100000000)
 		if id == "" || start < 0 || max_num < 1 {
 			return wret.Error("args")
 		}
 
-		return getAfter(id, start, max_num)
+		return getAfter(id, start, max_num, max_size)
 	})
 
 	rpc.Alias("log/get", "log/get/after")
