@@ -74,23 +74,26 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 	nextId := 1
 	notify_logs := make(map[string]*notifyLog) // map[name]
 
-	getNextId := func() string {
+	getNextId := func(token string) string {
 		id := nextId
 		nextId++
-		return fmt.Sprint(id)
+
+		name, _ := wrbac.FromToken(token)
+		return name + "@" + strconv.Itoa(id)
 	}
 
 	getNotifyLog := func(token string) *notifyLog {
 		name, _ := wrbac.FromToken(token)
+		id := name + "@" + "notification"
+
 		nl := notify_logs[name]
 		if nl == nil {
-			new_id := getNextId()
-			wl := new_weblog(name + "@notification")
+			wl := new_weblog("notification_log")
 			wl.alwaysOpen = true
-			weblogs[new_id] = wl
+			weblogs[id] = wl
 
 			nl = &notifyLog{
-				id:      new_id,
+				id:      id,
 				version: fmt.Sprint(time.Now().Unix()),
 			}
 			notify_logs[name] = nl
@@ -114,12 +117,14 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		id := make(chan string, 1)
 		defer close(id)
 		ch <- func() {
-			new_id := getNextId()
+			new_id := getNextId(r.Token)
 			weblogs[new_id] = new_weblog(name)
 			id <- new_id
 
 			sync.C <- func(sync *wsync.Server) {
 				sync.Boardcast("log:new")
+
+				sync.Boardcast("logs")
 			}
 		}
 		return wret.OK(<-id)
@@ -144,6 +149,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 			Args:   []string{<-id, content},
 		})
 	})
+
 	rpc.HandleFunc("log/notify/info", func(r wrpc.Req) wrpc.Resp {
 		nlch := make(chan notifyLog, 1)
 		ch <- func() {
@@ -162,9 +168,13 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		id := r.Args[0]
 
 		retOK := make(chan bool, 1)
+		statCh := make(chan webasis.WebLogStat, 1)
 		defer close(retOK)
 		ch <- func() {
-			if weblog, ok := weblogs[id]; ok {
+			defer close(statCh)
+			weblog, ok := weblogs[id]
+			statCh <- weblog.Stat(id)
+			if ok {
 				if weblog.alwaysOpen {
 					retOK <- false
 					return
@@ -175,10 +185,16 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 				retOK <- false
 			}
 		}
+
+		stat := <-statCh
 		if <-retOK {
 			sync.C <- func(sync *wsync.Server) {
 				sync.Boardcast(fmt.Sprintf("log#%s:stat", id))
 				sync.Boardcast("log:stat")
+
+				// new
+				sync.Boardcast("logs")
+				sync.Boardcast("log:"+id, webasis.Int(stat.Line))
 			}
 
 			return wret.OK()
@@ -268,6 +284,10 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 			sync.C <- func(sync *wsync.Server) {
 				sync.Boardcast(fmt.Sprintf("log#%s:stat", id))
 				sync.Boardcast("log:stat")
+
+				// new
+				sync.Boardcast("logs")
+				sync.Boardcast("log:"+id, webasis.Int(-1))
 			}
 
 		}
@@ -329,9 +349,16 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 				weblog.logs = append(weblog.logs, log)
 			}
 
+			stat := weblog.Stat(id)
+
 			sync.C <- func(sync *wsync.Server) {
 				sync.Boardcast(fmt.Sprintf("log#%s:stat", id))
 				sync.Boardcast("log:stat")
+
+				// new
+				sync.Boardcast("logs")
+				sync.Boardcast("log:"+id, webasis.Int(stat.Line))
+
 			}
 			retOK <- true
 		}
