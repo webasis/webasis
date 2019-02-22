@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sort"
 	"strconv"
 	"time"
 
@@ -23,6 +22,7 @@ type weblog struct {
 	logs       []string
 	closed     bool
 	alwaysOpen bool
+	created    time.Time
 }
 
 func (wl weblog) size() int {
@@ -35,11 +35,12 @@ func (wl weblog) size() int {
 
 func (wl weblog) Stat(id string) webasis.WebLogStat {
 	return webasis.WebLogStat{
-		Id:     id,
-		Closed: wl.closed,
-		Size:   wl.size(),
-		Line:   len(wl.logs),
-		Name:   wl.name,
+		Id:      id,
+		Closed:  wl.closed,
+		Size:    wl.size(),
+		Line:    len(wl.logs),
+		Name:    wl.name,
+		Created: wl.created,
 	}
 
 }
@@ -50,6 +51,7 @@ func new_weblog(name string) *weblog {
 		logs:       make([]string, 0, 16),
 		closed:     false,
 		alwaysOpen: false,
+		created:    time.Now(),
 	}
 }
 
@@ -118,13 +120,15 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		defer close(id)
 		ch <- func() {
 			new_id := getNextId(r.Token)
-			weblogs[new_id] = new_weblog(name)
+			weblog := new_weblog(name)
+			weblogs[new_id] = weblog
 			id <- new_id
 
 			sync.C <- func(sync *wsync.Server) {
 				sync.Boardcast("log:new")
 
 				sync.Boardcast("logs")
+				sync.Boardcast("log:"+new_id, webasis.Int(0), webasis.Int(int(weblog.created.Unix())))
 			}
 		}
 		return wret.OK(<-id)
@@ -194,7 +198,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 
 				// new
 				sync.Boardcast("logs")
-				sync.Boardcast("log:"+id, webasis.Int(stat.Line))
+				sync.Boardcast("log:"+id, webasis.Int(stat.Line), webasis.Int(int(stat.Created.Unix())))
 			}
 
 			return wret.OK()
@@ -214,9 +218,6 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 			retLogs <- logs
 		}
 		logs := <-retLogs
-		sort.Slice(logs, func(i, j int) bool {
-			return logs[i] < logs[j]
-		})
 		return wret.OK(logs...)
 	})
 
@@ -287,7 +288,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 
 				// new
 				sync.Boardcast("logs")
-				sync.Boardcast("log:"+id, webasis.Int(-1))
+				sync.Boardcast("log:"+id, webasis.Int(-1), webasis.Int(-1))
 			}
 
 		}
@@ -314,7 +315,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		if ret.Id != id {
 			return wret.Error("not_found")
 		}
-		return wret.OK(ret.Name, webasis.Int(ret.Size), webasis.Int(ret.Line), webasis.Bool(ret.Closed))
+		return wret.OK(ret.Name, webasis.Int(ret.Size), webasis.Int(ret.Line), webasis.Bool(ret.Closed), webasis.Int(int(ret.Created.Unix())))
 	})
 
 	rpc.HandleFunc("log/append", func(r wrpc.Req) wrpc.Resp {
@@ -357,8 +358,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 
 				// new
 				sync.Boardcast("logs")
-				sync.Boardcast("log:"+id, webasis.Int(stat.Line))
-
+				sync.Boardcast("log:"+id, webasis.Int(stat.Line), webasis.Int(int(stat.Created.Unix())))
 			}
 			retOK <- true
 		}
@@ -375,15 +375,16 @@ func logs_ls(need_refresh bool) {
 	stats, err := webasis.LogAll(context.TODO())
 	ExitIfErr(err)
 
-	table := clitable.New([]string{"id", "name", "size", "line", "closed"})
+	table := clitable.New([]string{"id", "name", "size", "line", "closed", "created"})
 
 	for _, stat := range stats {
 		table.AddRow(map[string]interface{}{
-			"id":     stat.Id,
-			"name":   stat.Name,
-			"line":   stat.Line,
-			"size":   stat.Size,
-			"closed": stat.Closed,
+			"id":      stat.Id,
+			"name":    stat.Name,
+			"line":    stat.Line,
+			"size":    stat.Size,
+			"closed":  stat.Closed,
+			"created": stat.Created.Unix(),
 		})
 	}
 
@@ -468,7 +469,7 @@ func log() {
 	case "stats":
 		sync := wsync.NewClient(WSyncServerURL, Token)
 		sync.AfterOpen = func(_ *websocket.Conn) {
-			go sync.Sub("log:new", "log:stat")
+			go sync.Sub("log:new", "log:stat", "logs")
 		}
 
 		needUpdate := make(chan bool, 1)
@@ -504,6 +505,7 @@ func log() {
 		fmt.Println("Size:", stat.Size)
 		fmt.Println("Line:", stat.Line)
 		fmt.Println("Closed:", stat.Closed)
+		fmt.Println("Created:", stat.Created)
 	case "watch":
 		id := ""
 		if len(os.Args) > 2 {

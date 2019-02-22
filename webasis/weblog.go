@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 )
 
 func LogOpen(ctx context.Context, name string) (id string, err error) {
@@ -60,7 +61,7 @@ func LogGetAfter(ctx context.Context, id string, index int) (logs []string, err 
 
 func LogStat(ctx context.Context, id string) (stat WebLogStat, err error) {
 	resp, err := Call(ctx, "log/stat", id)
-	err = resp.Error(err, 4)
+	err = resp.Error(err, 5)
 	if err != nil {
 		return WebLogStat{}, err
 	}
@@ -68,34 +69,37 @@ func LogStat(ctx context.Context, id string) (stat WebLogStat, err error) {
 	fields := Fields(resp.Rets)
 
 	return WebLogStat{
-		Id:     id,
-		Name:   fields.Get(0, ""),
-		Size:   fields.Int(1, 0),
-		Line:   fields.Int(2, 0),
-		Closed: fields.Bool(3, true),
+		Id:      id,
+		Name:    fields.Get(0, ""),
+		Size:    fields.Int(1, 0),
+		Line:    fields.Int(2, 0),
+		Closed:  fields.Bool(3, true),
+		Created: time.Unix(int64(fields.Int(4, 0)), 0),
 	}, nil
 }
 
 type WebLogStat struct {
-	Id     string
-	Name   string
-	Closed bool
-	Size   int
-	Line   int
+	Id      string
+	Name    string
+	Closed  bool
+	Size    int
+	Line    int
+	Created time.Time
 }
 
 func (stat WebLogStat) Encode() string {
-	return strings.Join([]string{stat.Id, stat.Name, Int(stat.Size), Int(stat.Line), Bool(stat.Closed)}, ",")
+	return strings.Join([]string{stat.Id, stat.Name, Int(stat.Size), Int(stat.Line), Bool(stat.Closed), Int(int(stat.Created.Unix()))}, ",")
 }
 func DecodeWebLogStat(raw string) WebLogStat {
-	data := strings.SplitN(raw, ",", 5)
+	data := strings.SplitN(raw, ",", 6)
 	fields := Fields(data)
 	return WebLogStat{
-		Id:     fields.Get(0, ""),
-		Name:   fields.Get(1, ""),
-		Size:   fields.Int(2, 0),
-		Line:   fields.Int(3, 0),
-		Closed: fields.Bool(4, true),
+		Id:      fields.Get(0, ""),
+		Name:    fields.Get(1, ""),
+		Size:    fields.Int(2, 0),
+		Line:    fields.Int(3, 0),
+		Closed:  fields.Bool(4, true),
+		Created: time.Unix(int64(fields.Int(5, 0)), 0),
 	}
 }
 
