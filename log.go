@@ -204,7 +204,11 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		return wret.OK(logs...)
 	})
 
-	getAfter := func(id string, index int) wrpc.Resp {
+	getAfter := func(id string, start, max_num int) wrpc.Resp {
+		if max_num < 1 {
+			max_num = 1
+		}
+
 		retOK := make(chan bool, 1)
 		retLog := make(chan []string, 1)
 		defer close(retOK)
@@ -216,8 +220,12 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 				return
 			}
 
-			if index < len(weblog.logs) {
-				retLog <- weblog.logs[index:]
+			if start < len(weblog.logs) {
+				end := start + max_num
+				if end > len(weblog.logs) {
+					end = len(weblog.logs)
+				}
+				retLog <- weblog.logs[start:end]
 			}
 			retOK <- true
 			return
@@ -234,12 +242,13 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 	rpc.HandleFunc("log/get/after", func(r wrpc.Req) wrpc.Resp {
 		fields := webasis.Fields(r.Args)
 		id := fields.Get(0, "")
-		index := fields.Int(1, -1)
-		if id == "" || index < 0 {
+		start := fields.Int(1, 0)
+		max_num := fields.Int(2, 1000000)
+		if id == "" || start < 0 || max_num < 1 {
 			return wret.Error("args")
 		}
 
-		return getAfter(id, index)
+		return getAfter(id, start, max_num)
 	})
 
 	rpc.HandleFunc("log/get", func(r wrpc.Req) wrpc.Resp {
@@ -248,7 +257,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		}
 
 		id := r.Args[0]
-		return getAfter(id, 0)
+		return getAfter(id, 0, 1000000)
 	})
 
 	rpc.HandleFunc("log/delete", func(r wrpc.Req) wrpc.Resp {
