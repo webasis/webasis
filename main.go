@@ -60,6 +60,7 @@ type Notify struct {
 func daemon() {
 	sync := wsync.NewServer()
 	rpc := wrpc.NewServer()
+	rpc.MaxContentLength = 1024 * 1024 * 10 // 10MiB
 
 	// open gc
 	go func() {
@@ -97,6 +98,8 @@ func daemon() {
 		if resp.Status == wrpc.StatusOK {
 			sync.C <- func(sync *wsync.Server) {
 				sync.Boardcast("notify", content, NotificationURL)
+
+				// new
 				sync.Boardcast(name+"@notification", content, NotificationURL)
 			}
 		}
