@@ -55,7 +55,7 @@ func wrbac_register_role(rbac *wrbac.Table) {
 		},
 		RPC: func(r wrpc.Req) bool {
 			switch r.Method {
-			case "log/notify/info", "log/get/after":
+			case "log/get":
 				return true
 			}
 			return false

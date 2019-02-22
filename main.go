@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/immofon/mlog"
 	"github.com/webasis/webasis/webasis"
+	"github.com/webasis/wrbac"
 	"github.com/webasis/wrpc"
 	"github.com/webasis/wrpc/wret"
 	"github.com/webasis/wsync"
@@ -65,6 +66,8 @@ func daemon() {
 			return wret.Error("args")
 		}
 
+		name, _ := wrbac.FromToken(r.Token)
+
 		content := r.Args[0]
 
 		raw, err := json.Marshal(Notify{
@@ -84,6 +87,7 @@ func daemon() {
 		if resp.Status == wrpc.StatusOK {
 			sync.C <- func(sync *wsync.Server) {
 				sync.Boardcast("notify", content, NotificationURL)
+				sync.Boardcast(name+"@notification", content, NotificationURL)
 			}
 		}
 		return resp
