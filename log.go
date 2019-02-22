@@ -63,11 +63,11 @@ const DefaultBufSize = 0
 // log/open|name -> OK|id	#After# log:new
 // log/close|id -> OK	#After# log#id:stat, log:stat
 // log/all -> OK{|id,closed,size,name}
-// log/get|id -> OK{|logs}
+// log/get|id[|start[|max_num]] -> OK{|logs}
 // log/append|id{|logs} -> OK #After# log#id:stat, log:stat
 // log/delete|id ->OK #After# log#id:stat, log:stat
 // log/stat|id ->OK|name|size:int|closed:bool
-// log/get/after|id|index -> OK{|logs}
+// alias: log/get/after -> log/get
 func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 
 	weblogs := make(map[string]*weblog) // map[id]Log
@@ -238,8 +238,8 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		}
 	}
 
-	// log/get/after|id|index -> OK{|logs}
-	rpc.HandleFunc("log/get/after", func(r wrpc.Req) wrpc.Resp {
+	// log/get|id[|start[|max_num]] -> OK{|logs}
+	rpc.HandleFunc("log/get", func(r wrpc.Req) wrpc.Resp {
 		fields := webasis.Fields(r.Args)
 		id := fields.Get(0, "")
 		start := fields.Int(1, 0)
@@ -251,14 +251,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		return getAfter(id, start, max_num)
 	})
 
-	rpc.HandleFunc("log/get", func(r wrpc.Req) wrpc.Resp {
-		if len(r.Args) != 1 {
-			return wret.Error("args")
-		}
-
-		id := r.Args[0]
-		return getAfter(id, 0, 1000000)
-	})
+	rpc.Alias("log/get", "log/get/after")
 
 	rpc.HandleFunc("log/delete", func(r wrpc.Req) wrpc.Resp {
 		if len(r.Args) != 1 {
