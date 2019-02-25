@@ -26,14 +26,14 @@ WEBASIS_TOKEN=token_for_auth
 - status/wsync/connected -> ok|count
 - status/wsync/message -> ok|count
 - status/wrpc/called -> ok|count
-- log/open|name -> ok|id #event: log:new
-- log/close|id -> ok #event: log#id:stat, log:stat
-- log/all -> ok{|id,closed,size,name}
-- log/get|id -> ok{|logs}
-- log/append|id{|logs} -> ok #event: log#id:stat, log:stat
-- log/delete|id -> ok #event: log#id:stat, log:stat
-- log/stat|id -> ok|name|size:int|closed:bool
-- log/get/after|id|index -> ok{|logs}
+- log/open|name -> OK|id	WSYNC: logs,log:{id}|{line}|{created}
+- log/close|id -> OK	WSYNC: logs,log:{id}|{line}|{created}
+- log/all -> OK{|id,closed,size,name}
+- log/get|id[|start[|max-num[|max-size]]] -> OK{|logs}
+- log/append|id{|logs} -> OK WSYNC: logs,log:{id}|{line}|{created}
+- log/delete|id -> OK WSYNC: logs,log:{id}
+- log/stat|id -> OK|name|size:int|closed:bool|created:int
+- alias: log/get/after -> log/get
 
 ## push
 webasis [name=/dev/stdin]

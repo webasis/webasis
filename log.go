@@ -62,13 +62,13 @@ type notifyLog struct {
 
 const DefaultBufSize = 0
 
-// log/open|name -> OK|id	#After# log:new
-// log/close|id -> OK	#After# log#id:stat, log:stat
+// log/open|name -> OK|id	WSYNC: logs,log:{id}|{line}|{created}
+// log/close|id -> OK	WSYNC: logs,log:{id}|{line}|{created}
 // log/all -> OK{|id,closed,size,name}
 // log/get|id[|start[|max_num[|max_size]]] -> OK{|logs}
-// log/append|id{|logs} -> OK #After# log#id:stat, log:stat
-// log/delete|id ->OK #After# log#id:stat, log:stat
-// log/stat|id ->OK|name|size:int|closed:bool
+// log/append|id{|logs} -> OK WSYNC: logs,log:{id}|{line}|{created}
+// log/delete|id ->OK WSYNC: logs,log:{id}
+// log/stat|id ->OK|name|size:int|closed:bool|created:int
 // alias: log/get/after -> log/get
 func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 
@@ -274,7 +274,6 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		}
 	}
 
-	// log/get|id[|start[|max_num]] -> OK{|logs}
 	rpc.HandleFunc("log/get", func(r wrpc.Req) wrpc.Resp {
 		fields := webasis.Fields(r.Args)
 		id := fields.Get(0, "")
@@ -315,7 +314,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		return wret.OK()
 	})
 
-	// log/stat|id ->OK|name|size:int|closed:bool
+	// log/stat|id ->OK|name|size:int|closed:bool|created:int
 	rpc.HandleFunc("log/stat", func(r wrpc.Req) wrpc.Resp {
 		if len(r.Args) != 1 {
 			return wret.Error("args")
