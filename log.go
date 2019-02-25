@@ -131,8 +131,6 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 			id <- new_id
 
 			sync.C <- func(sync *wsync.Server) {
-				sync.Boardcast("log:new")
-
 				sync.Boardcast("logs")
 				sync.Boardcast("log:"+new_id, webasis.Int(0), webasis.Int(int(weblog.created.Unix())))
 			}
@@ -186,10 +184,6 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		stat := <-statCh
 		if <-retOK {
 			sync.C <- func(sync *wsync.Server) {
-				sync.Boardcast(fmt.Sprintf("log#%s:stat", id))
-				sync.Boardcast("log:stat")
-
-				// new
 				sync.Boardcast("logs")
 				sync.Boardcast("log:"+id, webasis.Int(stat.Line), webasis.Int(int(stat.Created.Unix())))
 			}
@@ -295,10 +289,6 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 
 			delete(weblogs, id)
 			sync.C <- func(sync *wsync.Server) {
-				sync.Boardcast(fmt.Sprintf("log#%s:stat", id))
-				sync.Boardcast("log:stat")
-
-				// new
 				sync.Boardcast("logs")
 				sync.Boardcast("log:" + id)
 			}
@@ -365,10 +355,6 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 			stat := weblog.Stat(id)
 
 			sync.C <- func(sync *wsync.Server) {
-				sync.Boardcast(fmt.Sprintf("log#%s:stat", id))
-				sync.Boardcast("log:stat")
-
-				// new
 				sync.Boardcast("logs")
 				sync.Boardcast("log:"+id, webasis.Int(stat.Line), webasis.Int(int(stat.Created.Unix())))
 			}
