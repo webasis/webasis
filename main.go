@@ -143,7 +143,7 @@ func daemon() {
 		}
 	})
 
-	mlog.L().WithField("addr", ServeAddr).WithField("token", Token).Info("listen")
+	mlog.L().WithField("addr", ServeAddr).Info("listen")
 	if ServeSSL == "on" {
 		mlog.L().Info("open ssl")
 		mlog.L().Error(http.ListenAndServeTLS(ServeAddr, SSLCert, SSLKey, nil))

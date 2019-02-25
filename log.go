@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	clitable "github.com/crackcomm/go-clitable"
@@ -55,11 +56,6 @@ func new_weblog(name string) *weblog {
 	}
 }
 
-type notifyLog struct {
-	id      string
-	version string
-}
-
 const DefaultBufSize = 0
 
 // log/open|name -> OK|id	WSYNC: logs,log:{id}|{line}|{created}
@@ -72,36 +68,24 @@ const DefaultBufSize = 0
 // alias: log/get/after -> log/get
 func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 
+	reserved := func(id string) (is, alwaysOpen bool, name string) {
+		reservedKey := map[string]bool{ // map[id]alwaysOpen
+			"notification": true,
+		}
+		index := strings.Index(id, "@")
+		index++
+		if index <= 0 {
+			return false, false, ""
+		}
+		name = id[index:]
+		alwaysOpen, is = reservedKey[name]
+		name = name + "_log"
+		fmt.Println("reserved:", name)
+		return
+	}
+
 	weblogs := make(map[string]*weblog) // map[id]Log
 	nextId := 1
-	notify_logs := make(map[string]*notifyLog) // map[name]
-
-	getNextId := func(token string) string {
-		id := nextId
-		nextId++
-
-		name, _ := wrbac.FromToken(token)
-		return name + "@" + strconv.Itoa(id)
-	}
-
-	getNotifyLog := func(token string) *notifyLog {
-		name, _ := wrbac.FromToken(token)
-		id := name + "@" + "notification"
-
-		nl := notify_logs[name]
-		if nl == nil {
-			wl := new_weblog("notification_log")
-			wl.alwaysOpen = true
-			weblogs[id] = wl
-
-			nl = &notifyLog{
-				id:      id,
-				version: fmt.Sprint(time.Now().Unix()),
-			}
-			notify_logs[name] = nl
-		}
-		return nl
-	}
 
 	ch := make(chan func(), 1000)
 	go func() {
@@ -109,6 +93,29 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 			fn()
 		}
 	}()
+
+	getNextId := func(token string) string {
+		id := strconv.Itoa(nextId)
+		nextId++
+
+		name, _ := wrbac.FromToken(token)
+		return name + "@" + id
+	}
+
+	get_weblog := func(token, id string) *weblog {
+		wl := weblogs[id]
+		if wl == nil {
+			is, alwaysOpen, name := reserved(id)
+			if !is {
+				return nil
+			}
+
+			wl = new_weblog(name)
+			wl.alwaysOpen = alwaysOpen
+			weblogs[id] = wl
+		}
+		return wl
+	}
 
 	rpc.HandleFunc("log/open", func(r wrpc.Req) wrpc.Resp {
 		if len(r.Args) != 1 {
@@ -120,8 +127,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		defer close(id)
 		ch <- func() {
 			new_id := getNextId(r.Token)
-			weblog := new_weblog(name)
-			weblogs[new_id] = weblog
+			weblog := get_weblog(new_id, name)
 			id <- new_id
 
 			sync.C <- func(sync *wsync.Server) {
@@ -141,27 +147,14 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 
 		content := r.Args[0]
 
-		id := make(chan string, 1)
-		ch <- func() {
-			nl := getNotifyLog(r.Token)
-			id <- nl.id
-		}
+		name, _ := wrbac.FromToken(r.Token)
+		id := name + "@" + "notification"
 
 		return rpc.CallWithoutAuth(wrpc.Req{
 			Token:  r.Token,
 			Method: "log/append",
-			Args:   []string{<-id, content},
+			Args:   []string{id, content},
 		})
-	})
-
-	rpc.HandleFunc("log/notify/info", func(r wrpc.Req) wrpc.Resp {
-		nlch := make(chan notifyLog, 1)
-		ch <- func() {
-			nl := getNotifyLog(r.Token)
-			nlch <- *nl
-		}
-		nl := <-nlch
-		return wret.OK(nl.id, nl.version)
 	})
 
 	rpc.HandleFunc("log/close", func(r wrpc.Req) wrpc.Resp {
@@ -352,8 +345,8 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		reason := ""
 		retOK := make(chan bool, 1)
 		ch <- func() {
-			weblog, ok := weblogs[id]
-			if !ok {
+			weblog := get_weblog(r.Token, id)
+			if weblog == nil {
 				reason = "not_found"
 				retOK <- false
 				return
