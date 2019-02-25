@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 
 	"github.com/webasis/wrbac"
 	"github.com/webasis/wrpc"
@@ -13,6 +14,7 @@ import (
 
 type User struct {
 	Secret string   `json:"secret"`
+	Mask   string   `json:"mask"`
 	Roles  []string `json:"roles"`
 }
 type AuthModel map[string]map[string]User // map[name]map[comment]User
@@ -37,6 +39,28 @@ func wrbac_register_role(rbac *wrbac.Table) {
 			return true
 		},
 		RPC: func(r wrpc.Req) bool {
+			return true
+		},
+	})
+
+	rbac.Register("mask_user", &wrbac.Role{
+		Sync: func(token string, m wsync.AuthMethod, topic string) bool {
+			if m == wsync.AuthMethod_Boardcast {
+				return false
+			}
+			return true
+		},
+		RPC: func(r wrpc.Req) bool {
+			name, _ := wrbac.FromToken(r.Token)
+
+			switch r.Method {
+			case "log/append", "log/get", "log/close", "log/stat", "log/delete":
+				if len(r.Args) > 0 && strings.HasPrefix(r.Args[0], name+"@") {
+					return true
+				} else {
+					return false
+				}
+			}
 			return true
 		},
 	})
@@ -72,6 +96,10 @@ func wrbac_load(rbac *wrbac.Table) {
 		}
 
 		for desc, user := range client {
+			if !rbac.Check(user.Mask) {
+				fmt.Printf("\x1b[31mconfig error: %s.%s unregistered_role: %s\n\x1b[0m", name, "<mask>", user.Mask)
+				configFailure = true
+			}
 			for _, role := range user.Roles {
 				if !rbac.Check(role) {
 					fmt.Printf("\x1b[31mconfig error: %s.%s unregistered_role: %s\n\x1b[0m", name, desc, role)
@@ -79,7 +107,7 @@ func wrbac_load(rbac *wrbac.Table) {
 				}
 			}
 
-			rbac.Load(name, user.Secret, user.Roles...)
+			rbac.Load(name, user.Secret, user.Mask, user.Roles...)
 			if !configFailure {
 				fmt.Printf("    %s\t%s\n", desc, wrbac.ToToken(name, user.Secret))
 			}
