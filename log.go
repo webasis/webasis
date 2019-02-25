@@ -308,7 +308,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 
 				// new
 				sync.Boardcast("logs")
-				sync.Boardcast("log:"+id, webasis.Int(-1), webasis.Int(-1))
+				sync.Boardcast("log:" + id)
 			}
 
 		}
