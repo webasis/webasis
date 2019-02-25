@@ -28,8 +28,17 @@ func EnableStatus(rpc *wrpc.Server, sync *wsync.Server) {
 		return wret.OK(fmt.Sprint(<-ch))
 	})
 
+	rpc.HandleFunc("status/wsync/init_metas_length", func(r wrpc.Req) wrpc.Resp {
+		ch := make(chan int, 1)
+		sync.C <- func(sync *wsync.Server) {
+			ch <- len(sync.InitMetas)
+		}
+		return wret.OK(fmt.Sprint(<-ch))
+	})
+
 	rpc.HandleFunc("status/wrpc/called", func(r wrpc.Req) wrpc.Resp {
 		ss := rpc.Status()
 		return wret.OK(fmt.Sprint(ss.Count))
 	})
+
 }
