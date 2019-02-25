@@ -61,6 +61,10 @@ func wrbac_register_role(rbac *wrbac.Table) {
 					return false
 				}
 			}
+
+			if strings.HasPrefix(r.Method, "admin") {
+				return false
+			}
 			return true
 		},
 	})

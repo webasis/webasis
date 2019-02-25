@@ -177,13 +177,31 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		}
 	})
 
-	rpc.HandleFunc("log/all", func(r wrpc.Req) wrpc.Resp {
+	rpc.HandleFunc("admin/log/all", func(r wrpc.Req) wrpc.Resp {
 		retLogs := make(chan []string, 1)
 		defer close(retLogs)
 		ch <- func() {
 			logs := make([]string, 0, len(weblogs))
 			for id, weblog := range weblogs {
 				logs = append(logs, weblog.Stat(id).Encode())
+			}
+			retLogs <- logs
+		}
+		logs := <-retLogs
+		return wret.OK(logs...)
+	})
+
+	rpc.HandleFunc("log/all", func(r wrpc.Req) wrpc.Resp {
+		name, _ := wrbac.FromToken(r.Token)
+
+		retLogs := make(chan []string, 1)
+		defer close(retLogs)
+		ch <- func() {
+			logs := make([]string, 0, len(weblogs))
+			for id, weblog := range weblogs {
+				if strings.HasPrefix(id, name+"@") {
+					logs = append(logs, weblog.Stat(id).Encode())
+				}
 			}
 			retLogs <- logs
 		}
