@@ -80,7 +80,6 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		name = id[index:]
 		alwaysOpen, is = reservedKey[name]
 		name = name + "_log"
-		fmt.Println("reserved:", name)
 		return
 	}
 
@@ -283,10 +282,6 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 
 		id := r.Args[0]
 		ch <- func() {
-			if wl := weblogs[id]; wl.alwaysOpen {
-				return
-			}
-
 			delete(weblogs, id)
 			sync.C <- func(sync *wsync.Server) {
 				sync.Boardcast("logs")
