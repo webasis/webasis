@@ -446,7 +446,7 @@ func log() {
 	case "list", "ls":
 		logs_ls(false)
 	case "create":
-		name := fmt.Sprintf("/dev/stdin#%d", os.Getpid())
+		name := fmt.Sprintf("stdin/%d", os.Getpid())
 		if len(os.Args) > 2 {
 			name = os.Args[2]
 		}
