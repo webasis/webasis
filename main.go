@@ -94,14 +94,11 @@ func daemon() {
 
 		resp := rpc.CallWithoutAuth(wrpc.Req{
 			Token:  r.Token,
-			Method: "log/notify",
-			Args:   []string{string(raw)},
+			Method: "log/append",
+			Args:   []string{name + "@notification", string(raw)},
 		})
 		if resp.Status == wrpc.StatusOK {
 			sync.C <- func(sync *wsync.Server) {
-				sync.Boardcast("notify", content, NotificationURL)
-
-				// new
 				sync.Boardcast(name+"@notification", content, NotificationURL)
 			}
 		}

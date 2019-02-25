@@ -93,7 +93,7 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		}
 	}()
 
-	getNextId := func(token string) string {
+	go_next_id := func(token string) string {
 		id := strconv.Itoa(nextId)
 		nextId++
 
@@ -125,8 +125,9 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 		id := make(chan string, 1)
 		defer close(id)
 		ch <- func() {
-			new_id := getNextId(r.Token)
-			weblog := get_weblog(new_id, name)
+			new_id := go_next_id(r.Token)
+			weblog := new_weblog(name)
+			weblogs[new_id] = weblog
 			id <- new_id
 
 			sync.C <- func(sync *wsync.Server) {
@@ -135,23 +136,6 @@ func EnableLog(rpc *wrpc.Server, sync *wsync.Server) {
 			}
 		}
 		return wret.OK(<-id)
-	})
-
-	rpc.HandleFunc("log/notify", func(r wrpc.Req) wrpc.Resp {
-		if len(r.Args) != 1 {
-			return wret.Error("args")
-		}
-
-		content := r.Args[0]
-
-		name, _ := wrbac.FromToken(r.Token)
-		id := name + "@" + "notification"
-
-		return rpc.CallWithoutAuth(wrpc.Req{
-			Token:  r.Token,
-			Method: "log/append",
-			Args:   []string{id, content},
-		})
 	})
 
 	rpc.HandleFunc("log/close", func(r wrpc.Req) wrpc.Resp {
