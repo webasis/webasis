@@ -39,18 +39,8 @@ func LogAppend(ctx context.Context, id string, logs ...string) error {
 	return resp.Error(err, 0)
 }
 
-func LogGet(ctx context.Context, id string) (logs []string, err error) {
-	resp, err := Call(ctx, "log/get", id)
-	err = resp.Error(err, -1)
-	if err != nil {
-		return nil, err
-	}
-
-	return resp.Rets, nil
-}
-
-func LogGetAfter(ctx context.Context, id string, index int) (logs []string, err error) {
-	resp, err := Call(ctx, "log/get/after", id, Int(index))
+func LogGet(ctx context.Context, id string, index, max_num, max_size int) (logs []string, err error) {
+	resp, err := Call(ctx, "log/get", id, Int(index), Int(max_num), Int(max_size))
 	err = resp.Error(err, -1)
 	if err != nil {
 		return nil, err

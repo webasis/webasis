@@ -65,7 +65,7 @@ const DefaultBufSize = 0
 // log/open|name -> OK|id	#After# log:new
 // log/close|id -> OK	#After# log#id:stat, log:stat
 // log/all -> OK{|id,closed,size,name}
-// log/get|id[|start[|max_num]] -> OK{|logs}
+// log/get|id[|start[|max_num[|max_size]]] -> OK{|logs}
 // log/append|id{|logs} -> OK #After# log#id:stat, log:stat
 // log/delete|id ->OK #After# log#id:stat, log:stat
 // log/stat|id ->OK|name|size:int|closed:bool
@@ -555,7 +555,7 @@ func watch_log(id string) {
 		for range needUpdate {
 			stat, err := webasis.LogStat(context.TODO(), id)
 			ExitIfErr(err)
-			logs, err := webasis.LogGetAfter(context.TODO(), id, index)
+			logs, err := webasis.LogGet(context.TODO(), id, index, 1000, 1024*10)
 			ExitIfErr(err)
 			index += len(logs)
 
@@ -582,7 +582,7 @@ func watch_log(id string) {
 }
 
 func log_get(id string, refresh bool) {
-	logs, err := webasis.LogGet(context.TODO(), id)
+	logs, err := webasis.LogGet(context.TODO(), id, 0, 1000, 1024*10)
 	ExitIfErr(err)
 
 	if refresh {
