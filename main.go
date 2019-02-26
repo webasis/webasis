@@ -105,6 +105,22 @@ func daemon() {
 		return resp
 	})
 
+	// adminboardcast|topic{|metas}
+	rpc.HandleFunc("admin/boardcast", func(r wrpc.Req) wrpc.Resp {
+		if len(r.Args) < 1 {
+			return wret.Error("args")
+		}
+		topic := r.Args[0]
+		var metas []string
+		if len(r.Args) > 1 {
+			metas = r.Args[1:]
+		}
+		sync.C <- func(sync *wsync.Server) {
+			sync.Boardcast(topic, metas...)
+		}
+		return wret.OK()
+	})
+
 	EnableAuth(rpc, sync)
 	EnableStatus(rpc, sync)
 	EnableLog(rpc, sync)
