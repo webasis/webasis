@@ -8,11 +8,11 @@ import (
 	"github.com/webasis/wsync"
 )
 
-// status/wsync/connected -> OK|count
-// status/wsync/message -> OK|count
-// status/wrpc/called -> OK|count
+// admin/status/wsync/connected -> OK|count
+// admin/status/wsync/message -> OK|count
+// admin/status/wrpc/called -> OK|count
 func EnableStatus(rpc *wrpc.Server, sync *wsync.Server) {
-	rpc.HandleFunc("status/wsync/connected", func(r wrpc.Req) wrpc.Resp {
+	rpc.HandleFunc("admin/status/wsync/connected", func(r wrpc.Req) wrpc.Resp {
 		ch := make(chan int, 1)
 		sync.C <- func(sync *wsync.Server) {
 			ch <- len(sync.Agents)
@@ -20,7 +20,7 @@ func EnableStatus(rpc *wrpc.Server, sync *wsync.Server) {
 		return wret.OK(fmt.Sprint(<-ch))
 	})
 
-	rpc.HandleFunc("status/wsync/message", func(r wrpc.Req) wrpc.Resp {
+	rpc.HandleFunc("admin/status/wsync/message", func(r wrpc.Req) wrpc.Resp {
 		ch := make(chan int, 1)
 		sync.C <- func(sync *wsync.Server) {
 			ch <- sync.MessageSent
@@ -28,7 +28,7 @@ func EnableStatus(rpc *wrpc.Server, sync *wsync.Server) {
 		return wret.OK(fmt.Sprint(<-ch))
 	})
 
-	rpc.HandleFunc("status/wsync/init_metas_length", func(r wrpc.Req) wrpc.Resp {
+	rpc.HandleFunc("admin/status/wsync/init_metas_length", func(r wrpc.Req) wrpc.Resp {
 		ch := make(chan int, 1)
 		sync.C <- func(sync *wsync.Server) {
 			ch <- len(sync.InitMetas)
@@ -36,7 +36,7 @@ func EnableStatus(rpc *wrpc.Server, sync *wsync.Server) {
 		return wret.OK(fmt.Sprint(<-ch))
 	})
 
-	rpc.HandleFunc("status/wrpc/called", func(r wrpc.Req) wrpc.Resp {
+	rpc.HandleFunc("admin/status/wrpc/called", func(r wrpc.Req) wrpc.Resp {
 		ss := rpc.Status()
 		return wret.OK(fmt.Sprint(ss.Count))
 	})
