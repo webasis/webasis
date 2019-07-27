@@ -156,6 +156,45 @@ func daemon() {
 		}
 	})
 
+	student_info_ch := make(chan StudentInfo, 200)
+	go func() {
+		f, err := os.OpenFile("students_info.json.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		if err != nil {
+			mlog.L().Error(err)
+			return
+		}
+		defer f.Close()
+
+		out := json.NewEncoder(f)
+		for info := range student_info_ch {
+			out.Encode(info)
+			f.Sync()
+		}
+	}()
+
+	http.HandleFunc("/api/freetimecollector", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		var info StudentInfo
+		err := json.NewDecoder(r.Body).Decode(&info)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if info.Time == 0 {
+			info.Time = int(time.Now().Unix())
+		}
+
+		// write info
+		student_info_ch <- info
+
+		w.WriteHeader(http.StatusOK)
+	})
+
 	mlog.L().WithField("addr", ServeAddr).Info("listen")
 	if ServeSSL == "on" {
 		mlog.L().Info("open ssl")
@@ -163,6 +202,20 @@ func daemon() {
 	} else {
 		mlog.L().Error(http.ListenAndServe(ServeAddr, nil))
 	}
+}
+
+type FreeTime struct {
+	Week    string `json:"week"`
+	Lession string `json:"lession"`
+}
+
+type StudentInfo struct {
+	Name      string     `json:"student_name"`
+	ID        string     `json:"student_id"`
+	Class     string     `json:"student_class"`
+	Token     string     `json:"token"`
+	FreeTimes []FreeTime `json:"free_time"`
+	Time      int        `json:"time"`
 }
 
 func main() {
