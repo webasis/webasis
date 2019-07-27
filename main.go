@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/immofon/mlog"
 	"github.com/webasis/webasis/webasis"
+	"github.com/webasis/wlock"
 	"github.com/webasis/wrbac"
 	"github.com/webasis/wrpc"
 	"github.com/webasis/wrpc/wret"
@@ -124,6 +125,9 @@ func daemon() {
 	EnableAuth(rpc, sync)
 	EnableStatus(rpc, sync)
 	EnableLog(rpc, sync)
+
+	lm := wlock.New()
+	wlock.Enable(rpc, lm)
 
 	http.Handle("/wrpc", rpc)
 	http.Handle("/wsync", sync)
